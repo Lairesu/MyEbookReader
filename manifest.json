@@ -1,0 +1,10 @@
+{
+  "name": "My Ebook Reader",
+  "short_name": "EbookReader",
+  "description": "Offline EPUB Reader",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a1a",
+  "orientation": "any"
+}

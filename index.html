@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#1a1a1a" />
+    <meta name="description" content="Offline EPUB Reader" />
+
+    <title>My Ebook Reader</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json" />
+
+    <!-- Styles -->
+    <link rel="stylesheet" href="styles.css" />
+
+    <!-- Libraries -->
+    <script src="libs/jszip.min.js"></script>
+    <script src="libs/epub.min.js"></script>
+    <script src="libs/localforage.min.js"></script>
+  </head>
+  <body>
+    <!-- ==================== LIBRARY VIEW ==================== -->
+    <div id="library-view">
+      <header class="header">
+        <h1>My Books</h1>
+        <button id="add-book-btn" class="btn">+ Add Book</button>
+      </header>
+
+      <input type="file" id="file-input" accept=".epub" hidden />
+
+      <div id="book-list" class="book-list">
+        <!-- Books will be added here by JavaScript -->
+      </div>
+
+      <p id="empty-message" class="empty-message">
+        No books yet.<br />
+        Click "+ Add Book" to load an EPUB file.
+      </p>
+    </div>
+
+    <!-- ==================== READER VIEW ==================== -->
+    <div id="reader-view" class="hidden">
+      <header class="reader-header">
+        <button id="back-btn" class="btn-icon">←</button>
+        <div id="book-title" class="book-title">Loading...</div>
+        <button id="menu-btn" class="btn-icon">☰</button>
+      </header>
+
+      <div id="viewer"></div>
+
+      <div class="reader-controls">
+        <button id="prev-btn" class="btn-icon">‹</button>
+        <div id="progress-bar">
+          <div id="progress-fill"></div>
+        </div>
+        <button id="next-btn" class="btn-icon">›</button>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS PANEL ==================== -->
+    <div id="settings-panel" class="settings-panel hidden">
+      <div class="settings-content">
+        <h2>Settings</h2>
+
+        <div class="setting-item">
+          <label>Font Size</label>
+          <div class="font-controls">
+            <button id="font-decrease" class="btn">A-</button>
+            <span id="font-size-value">100%</span>
+            <button id="font-increase" class="btn">A+</button>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label>Theme</label>
+          <div class="theme-buttons">
+            <button class="theme-btn" data-theme="light">Light</button>
+            <button class="theme-btn" data-theme="dark">Dark</button>
+            <button class="theme-btn" data-theme="sepia">Sepia</button>
+          </div>
+        </div>
+
+        <button id="close-settings" class="btn full-width">Close</button>
+      </div>
+    </div>
+
+    <!-- Main App Logic -->
+    <script src="app.js"></script>
+  </body>
+</html>
