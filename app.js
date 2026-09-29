@@ -182,29 +182,31 @@ async function openBook(id) {
 
     currentBookId = id;
 
-    // Show reader view
+    // Show reader view first
     libraryView.classList.add("hidden");
     readerView.classList.remove("hidden");
     bookTitle.textContent = bookData.title || "Untitled";
 
-    // Destroy previous book if exists
+    // Destroy previous book
     if (book) {
       try {
         book.destroy();
-      } catch (e) {
-        console.log("Error destroying previous book:", e);
-      }
+      } catch (e) {}
       book = null;
       rendition = null;
     }
 
-    // Clear the viewer
+    // Clear viewer
     const viewer = document.getElementById("viewer");
     viewer.innerHTML = "";
 
-    // Load the new book
+    // Create book
     book = ePub(bookData.data);
 
+    // IMPORTANT: wait until the book is fully parsed
+    await book.ready;
+
+    // Now render
     rendition = book.renderTo("viewer", {
       width: "100%",
       height: "100%",
@@ -212,18 +214,18 @@ async function openBook(id) {
       manager: "default",
     });
 
-    // Restore last location || Display the book
+    // Display
     const location = bookData.lastLocation || 0;
     await rendition.display(location);
 
-    // Force a resize (helps with rendering issues)
+    // Force resize after a short delay (very important)
     setTimeout(() => {
       if (rendition) {
         rendition.resize();
       }
-    }, 100);
+    }, 150);
 
-    // Save location when page changes
+    // Save progress
     rendition.on("relocated", async (location) => {
       try {
         const books = (await localforage.getItem("books")) || {};
@@ -231,20 +233,18 @@ async function openBook(id) {
           books[currentBookId].lastLocation = location.start.cfi;
           await localforage.setItem("books", books);
         }
-
         if (location.start.percentage) {
           progressFill.style.width = location.start.percentage * 100 + "%";
         }
       } catch (err) {
-        console.error("Error saving location:", err);
+        console.error(err);
       }
     });
 
-    // Apply current font size
     changeFontSize(0);
   } catch (err) {
     console.error("Error opening book:", err);
-    alert("Failed to open book: " + err.message);
+    alert("Failed to open book. Try hard refresh (Ctrl + Shift + R).");
   }
 }
 
@@ -290,7 +290,7 @@ function setTheme(theme) {
   }
 }
 
-// ====================== MASS ADD ======================
+//  MASS ADD
 async function handleFileSelect(e) {
   const files = Array.from(e.target.files);
   if (files.length === 0) return;
@@ -347,7 +347,7 @@ async function handleFileSelect(e) {
   }
 }
 
-// ====================== MASS DELETE ======================
+//  MASS DELETE
 function toggleSelectMode(enable) {
   const selectControls = document.getElementById("select-controls");
   const deleteBtn = document.getElementById("delete-selected-btn");
@@ -388,7 +388,7 @@ async function deleteSelectedBooks() {
   toggleSelectMode(false);
 }
 
-// ====================== UPDATED loadLibrary ======================
+//  UPDATED loadLibrary
 async function loadLibrary() {
   const books = (await localforage.getItem("books")) || {};
   bookList.innerHTML = "";

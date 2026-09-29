@@ -141,7 +141,6 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: white;
 }
 
 .reader-header {
@@ -161,12 +160,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-}
-
-#viewer {
-  flex: 1;
-  overflow: hidden;
-  background: white;
 }
 
 /* Epub.js iframe styling */

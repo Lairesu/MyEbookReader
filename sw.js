@@ -1,7 +1,6 @@
-const CACHE_NAME = "ebook-reader-v1";
+const CACHE_NAME = "ebook-reader-v3"; // ← change version number when you update code
 
-// Files that should always be available offline
-const ASSETS_TO_CACHE = [
+const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
@@ -12,32 +11,29 @@ const ASSETS_TO_CACHE = [
   "./libs/localforage.min.js",
 ];
 
-// Install event - cache the app shell
+// Install - cache the app shell
 self.addEventListener("install", (event) => {
-  console.log("[Service Worker] Installing...");
+  console.log("[SW] Installing new version...");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => {
-        console.log("[Service Worker] Caching app shell");
-        return cache.addAll(ASSETS_TO_CACHE);
-      })
-      .then(() => self.skipWaiting()),
+      .then((cache) => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()), // activate immediately
   );
 });
 
-// Activate event - clean up old caches
+// Activate - delete old caches
 self.addEventListener("activate", (event) => {
-  console.log("[Service Worker] Activating...");
+  console.log("[SW] Activating...");
   event.waitUntil(
     caches
       .keys()
-      .then((cacheNames) => {
+      .then((keys) => {
         return Promise.all(
-          cacheNames.map((cache) => {
-            if (cache !== CACHE_NAME) {
-              console.log("[Service Worker] Deleting old cache:", cache);
-              return caches.delete(cache);
+          keys.map((key) => {
+            if (key !== CACHE_NAME) {
+              console.log("[SW] Deleting old cache:", key);
+              return caches.delete(key);
             }
           }),
         );
@@ -46,33 +42,44 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch event - serve from cache first, then network
+// Fetch strategy
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
-  if (event.request.method !== "GET") return;
+  const request = event.request;
+
+  // Never interfere with these:
+  if (
+    request.url.startsWith("blob:") ||
+    request.url.startsWith("data:") ||
+    request.method !== "GET"
+  ) {
+    return; // let the browser handle it normally
+  }
 
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      // Return cached version if available
-      if (cachedResponse) {
-        return cachedResponse;
+    caches.match(request, { ignoreSearch: true }).then((cached) => {
+      if (cached) {
+        return cached; // serve from cache (offline works)
       }
 
-      // Otherwise fetch from network
-      return fetch(event.request)
-        .then((networkResponse) => {
-          // Optional: cache new files dynamically
-          return caches.open(CACHE_NAME).then((cache) => {
-            // Don't cache chrome-extension or other non-http requests
-            if (event.request.url.startsWith("http")) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          });
+      // Not in cache → try network
+      return fetch(request)
+        .then((response) => {
+          // Only cache successful responses of our own files
+          if (
+            response &&
+            response.status === 200 &&
+            request.url.startsWith(self.location.origin)
+          ) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
         })
         .catch(() => {
-          // If both cache and network fail
-          console.log("[Service Worker] Fetch failed for:", event.request.url);
+          if (request.mode === "navigate") return caches.match("./index.html");
+          return new Response("Offline", { status: 503 });
         });
     }),
   );
