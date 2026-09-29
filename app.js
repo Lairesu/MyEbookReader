@@ -65,6 +65,23 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.key === "ArrowLeft") rendition?.prev();
     if (e.key === "ArrowRight") rendition?.next();
   });
+
+  // select, Delete Select all checkbox interactive
+  document.getElementById("select-mode-btn").addEventListener("click", () => {
+    const isActive =
+      document.getElementById("select-controls").style.display === "block";
+    toggleSelectMode(!isActive);
+  });
+
+  document
+    .getElementById("delete-selected-btn")
+    .addEventListener("click", deleteSelectedBooks);
+
+  document.getElementById("select-all").addEventListener("change", (e) => {
+    document.querySelectorAll(".book-checkbox").forEach((cb) => {
+      cb.checked = e.target.checked;
+    });
+  });
 });
 
 // Library Functions
@@ -181,6 +198,10 @@ async function openBook(id) {
       rendition = null;
     }
 
+    // Clear the viewer
+    const viewer = document.getElementById("viewer");
+    viewer.innerHTML = "";
+
     // Load the new book
     book = ePub(bookData.data);
 
@@ -191,9 +212,16 @@ async function openBook(id) {
       manager: "default",
     });
 
-    // Restore last location
+    // Restore last location || Display the book
     const location = bookData.lastLocation || 0;
     await rendition.display(location);
+
+    // Force a resize (helps with rendering issues)
+    setTimeout(() => {
+      if (rendition) {
+        rendition.resize();
+      }
+    }, 100);
 
     // Save location when page changes
     rendition.on("relocated", async (location) => {
@@ -260,4 +288,149 @@ function setTheme(theme) {
       rendition.themes.override("background", "#fff");
     }
   }
+}
+
+// ====================== MASS ADD ======================
+async function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+
+  const books = (await localforage.getItem("books")) || {};
+  let addedCount = 0;
+
+  for (const file of files) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const tempBook = ePub(arrayBuffer);
+      await tempBook.ready;
+
+      const metadata = await tempBook.loaded.metadata;
+      const title = (metadata.title || file.name.replace(".epub", "")).trim();
+      const author = metadata.creator || "Unknown Author";
+
+      // Check for duplicate title (case-insensitive)
+      const existingId = Object.keys(books).find(
+        (id) => books[id].title.toLowerCase() === title.toLowerCase(),
+      );
+
+      if (existingId) {
+        const confirmAdd = confirm(
+          `A book named "${title}" already exists.\nDo you want to add it anyway?`,
+        );
+        if (!confirmAdd) continue;
+      }
+
+      const bookId =
+        "book_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
+
+      books[bookId] = {
+        title,
+        author,
+        data: arrayBuffer,
+        lastLocation: null,
+        addedAt: Date.now(),
+      };
+
+      addedCount++;
+    } catch (err) {
+      console.error("Failed to load:", file.name, err);
+      alert(`Failed to load "${file.name}"`);
+    }
+  }
+
+  await localforage.setItem("books", books);
+  await loadLibrary();
+  fileInput.value = "";
+
+  if (addedCount > 0) {
+    alert(`${addedCount} book(s) added successfully.`);
+  }
+}
+
+// ====================== MASS DELETE ======================
+function toggleSelectMode(enable) {
+  const selectControls = document.getElementById("select-controls");
+  const deleteBtn = document.getElementById("delete-selected-btn");
+  const selectModeBtn = document.getElementById("select-mode-btn");
+
+  selectControls.style.display = enable ? "block" : "none";
+  deleteBtn.style.display = enable ? "inline-block" : "none";
+  selectModeBtn.textContent = enable ? "Cancel" : "Select";
+
+  document.querySelectorAll(".book-checkbox").forEach((cb) => {
+    cb.style.display = enable ? "block" : "none";
+    cb.checked = false;
+  });
+
+  document.getElementById("select-all").checked = false;
+}
+
+async function deleteSelectedBooks() {
+  const checkboxes = document.querySelectorAll(".book-checkbox:checked");
+  if (checkboxes.length === 0) {
+    alert("No books selected");
+    return;
+  }
+
+  const confirmDelete = confirm(
+    `Are you sure you want to delete ${checkboxes.length} book(s)?`,
+  );
+  if (!confirmDelete) return;
+
+  const books = (await localforage.getItem("books")) || {};
+
+  checkboxes.forEach((cb) => {
+    delete books[cb.dataset.id];
+  });
+
+  await localforage.setItem("books", books);
+  await loadLibrary();
+  toggleSelectMode(false);
+}
+
+// ====================== UPDATED loadLibrary ======================
+async function loadLibrary() {
+  const books = (await localforage.getItem("books")) || {};
+  bookList.innerHTML = "";
+
+  const bookIds = Object.keys(books);
+
+  if (bookIds.length === 0) {
+    emptyMessage.style.display = "block";
+    document.getElementById("select-controls").style.display = "none";
+    return;
+  }
+
+  emptyMessage.style.display = "none";
+
+  bookIds.forEach((id) => {
+    const bookData = books[id];
+    const card = document.createElement("div");
+    card.className = "book-card";
+    card.innerHTML = `
+      <div class="book-info">
+        <h3>${bookData.title || "Untitled"}</h3>
+        <p>${bookData.author || "Unknown Author"}</p>
+      </div>
+      <button class="delete-btn" data-id="${id}">✕</button>
+    `;
+
+    card.addEventListener("click", (e) => {
+      if (
+        e.target.classList.contains("delete-btn") ||
+        e.target.classList.contains("book-checkbox")
+      )
+        return;
+      openBook(id);
+    });
+
+    card.querySelector(".delete-btn").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete "${bookData.title}"?`)) {
+        await deleteBook(id);
+      }
+    });
+
+    bookList.appendChild(card);
+  });
 }

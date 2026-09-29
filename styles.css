@@ -79,12 +79,13 @@ body {
 }
 
 .book-card {
+  position: relative;
+  padding-right: 36px;
   background: white;
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  position: relative;
   transition:
     transform 0.15s,
     box-shadow 0.15s;
@@ -173,7 +174,7 @@ body {
   flex: 1;
   width: 100%;
   height: 100%;
-  min-height: 0;    
+  min-height: 0;
   overflow: hidden;
   background: white;
   position: relative;
@@ -350,4 +351,76 @@ body.theme-sepia .reader-controls {
   .settings-content {
     padding: 20px 16px;
   }
+}
+
+/* header buttons */
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-secondary {
+  background-color: #6b7280;
+}
+
+.btn-secondary:hover {
+  background-color: #4b5563;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
+.select-controls {
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.book-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  z-index: 2;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.book-checkbox:hover {
+  outline: none;
+  box-shadow: none;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 14px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  transition: background 0.2s;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+}
+
+.book-card:hover .delete-btn {
+  display: flex;
 }

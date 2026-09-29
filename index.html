@@ -23,26 +23,39 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
-    <!-- ==================== LIBRARY VIEW ==================== -->
+    <!-- LIBRARY VIEW  -->
+    <!-- Library View -->
     <div id="library-view">
       <header class="header">
         <h1>My Books</h1>
-        <button id="add-book-btn" class="btn">+ Add Book</button>
+        <div class="header-buttons">
+          <button id="select-mode-btn" class="btn btn-secondary">Select</button>
+          <button id="add-book-btn" class="btn">+ Add Books</button>
+          <button
+            id="delete-selected-btn"
+            class="btn btn-danger"
+            style="display: none"
+          >
+            Delete Selected
+          </button>
+        </div>
       </header>
 
-      <input type="file" id="file-input" accept=".epub" hidden />
-
-      <div id="book-list" class="book-list">
-        <!-- Books will be added here by JavaScript -->
+      <div class="select-controls" id="select-controls" style="display: none">
+        <label> <input type="checkbox" id="select-all" /> Select All </label>
       </div>
+
+      <input type="file" id="file-input" accept=".epub" multiple hidden />
+
+      <div id="book-list" class="book-list"></div>
 
       <p id="empty-message" class="empty-message">
         No books yet.<br />
-        Click "+ Add Book" to load an EPUB file.
+        Click "+ Add Books" to load EPUB files.
       </p>
     </div>
 
-    <!-- ==================== READER VIEW ==================== -->
+    <!--  READER VIEW  -->
     <div id="reader-view" class="hidden">
       <header class="reader-header">
         <button id="back-btn" class="btn-icon">←</button>
@@ -61,7 +74,7 @@
       </div>
     </div>
 
-    <!-- ==================== SETTINGS PANEL ==================== -->
+    <!--  SETTINGS PANEL  -->
     <div id="settings-panel" class="settings-panel hidden">
       <div class="settings-content">
         <h2>Settings</h2>
