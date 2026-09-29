@@ -1,436 +1,426 @@
-// global variables
+// global variables - State
 let book = null;
 let rendition = null;
 let currentBookId = null;
-let currentFontSize = 100;
+let library = {};
+let settings = { fontSize: 100, theme: "light" };
+let saveTimer = null;
 
-// dom elements
-const libraryView = document.getElementById("library-view");
-const readerView = document.getElementById("reader-view");
-const bookList = document.getElementById("book-list");
-const emptyMessage = document.getElementById("empty-message");
-const fileInput = document.getElementById("file-input");
-const addBookBtn = document.getElementById("add-book-btn");
-const backBtn = document.getElementById("back-btn");
-const menuBtn = document.getElementById("menu-btn");
-const prevBtn = document.getElementById("prev-btn");
-const nextBtn = document.getElementById("next-btn");
-const bookTitle = document.getElementById("book-title");
-const settingsPanel = document.getElementById("settings-panel");
-const closeSettings = document.getElementById("close-settings");
-const fontDecrease = document.getElementById("font-decrease");
-const fontIncrease = document.getElementById("font-increase");
-const fontSizeValue = document.getElementById("font-size-value");
-const progressFill = document.getElementById("progress-fill");
+const $ = (id) => document.getElementById(id);
+const libraryView = $("library-view");
+const readerView = $("reader-view");
+const bookList = $("book-list");
+const continueSection = $("continue-section");
+const emptyMessage = $("empty-message");
+const fileInput = $("file-input");
+const settingsPanel = $("settings-panel");
+const progressFill = $("progress-fill");
+const progressText = $("progress-text");
+const fontSizeValue = $("font-size-value");
+
+// storage helpers
+const saveLibrary = () => localforage.setItem("library", library);
+const saveSettings = () => localforage.setItem("settings", settings);
+
+// moving old single-"books" storage into the new split format which runs once
+async function migrate() {
+  const old = await localforage.getItem("books");
+  if (!old) return;
+  const lib = (await localforage.getItem("library")) || {};
+  for (const [id, b] of Object.entries(old)) {
+    await localforage.setItem("file-" + id, b.data);
+    lib[id] = {
+      title: b.title,
+      author: b.author,
+      addedAt: b.addedAt || Date.now(),
+      lastOpened: 0,
+      cfi: b.lastLocation || null,
+      percent: 0,
+    };
+  }
+  await localforage.setItem("library", lib);
+  await localforage.removeItem("books"); // only after everything succeeded
+}
 
 // starting
 document.addEventListener("DOMContentLoaded", async () => {
-  // Register service worker for offline
   if ("serviceWorker" in navigator) {
     try {
       await navigator.serviceWorker.register("sw.js");
-      console.log("Service Worker registered");
     } catch (err) {
-      console.log("Service Worker registration failed:", err);
+      console.log("SW registration failed:", err);
     }
   }
+  navigator.storage?.persist?.();
 
-  // Load books from storage
-  await loadLibrary();
+  settings = {
+    ...settings,
+    ...((await localforage.getItem("settings")) || {}),
+  };
+  applyBodyTheme(settings.theme);
+  fontSizeValue.textContent = settings.fontSize + "%";
 
-  // Event listeners
-  addBookBtn.addEventListener("click", () => fileInput.click());
+  await migrate();
+  library = (await localforage.getItem("library")) || {};
+  renderLibrary();
+
+  $("add-book-btn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", handleFileSelect);
-  backBtn.addEventListener("click", showLibrary);
-  menuBtn.addEventListener("click", () =>
+  $("back-btn").addEventListener("click", showLibrary);
+  $("menu-btn").addEventListener("click", () =>
     settingsPanel.classList.remove("hidden"),
   );
-  closeSettings.addEventListener("click", () =>
+  $("close-settings").addEventListener("click", () =>
     settingsPanel.classList.add("hidden"),
   );
-  prevBtn.addEventListener("click", () => rendition?.prev());
-  nextBtn.addEventListener("click", () => rendition?.next());
+  $("prev-btn").addEventListener("click", () => rendition?.prev());
+  $("next-btn").addEventListener("click", () => rendition?.next());
+  $("font-decrease").addEventListener("click", () => changeFontSize(-10));
+  $("font-increase").addEventListener("click", () => changeFontSize(10));
+  document
+    .querySelectorAll(".theme-btn")
+    .forEach((btn) =>
+      btn.addEventListener("click", () => setTheme(btn.dataset.theme)),
+    );
 
-  fontDecrease.addEventListener("click", () => changeFontSize(-10));
-  fontIncrease.addEventListener("click", () => changeFontSize(10));
-
-  // Theme buttons
-  document.querySelectorAll(".theme-btn").forEach((btn) => {
-    btn.addEventListener("click", () => setTheme(btn.dataset.theme));
-  });
-
-  // Keyboard navigation
   document.addEventListener("keydown", (e) => {
     if (readerView.classList.contains("hidden")) return;
     if (e.key === "ArrowLeft") rendition?.prev();
     if (e.key === "ArrowRight") rendition?.next();
   });
 
-  // select, Delete Select all checkbox interactive
-  document.getElementById("select-mode-btn").addEventListener("click", () => {
-    const isActive =
-      document.getElementById("select-controls").style.display === "block";
-    toggleSelectMode(!isActive);
-  });
-
-  document
-    .getElementById("delete-selected-btn")
-    .addEventListener("click", deleteSelectedBooks);
-
-  document.getElementById("select-all").addEventListener("change", (e) => {
-    document.querySelectorAll(".book-checkbox").forEach((cb) => {
-      cb.checked = e.target.checked;
-    });
+  $("select-mode-btn").addEventListener("click", () =>
+    toggleSelectMode(!bookList.classList.contains("select-mode")),
+  );
+  $("delete-selected-btn").addEventListener("click", deleteSelectedBooks);
+  $("select-all").addEventListener("change", (e) => {
+    document
+      .querySelectorAll(".book-checkbox")
+      .forEach((cb) => (cb.checked = e.target.checked));
   });
 });
 
-// Library Functions
-async function loadLibrary() {
-  const books = (await localforage.getItem("books")) || {};
-  bookList.innerHTML = "";
+// Library
+function makeCard(id, data, big = false) {
+  const card = document.createElement("div");
+  card.className = "book-card" + (big ? " continue-card" : "");
 
-  const bookIds = Object.keys(books);
+  const info = document.createElement("div");
+  info.className = "book-info";
+  const h3 = document.createElement("h3");
+  h3.textContent = data.title || "Untitled";
+  const p = document.createElement("p");
+  p.textContent = data.author || "Unknown Author";
+  info.append(h3, p);
 
-  if (bookIds.length === 0) {
-    emptyMessage.style.display = "block";
-    return;
+  const meta = document.createElement("p");
+  meta.className = "book-meta";
+  const pct = Math.round((data.percent || 0) * 100);
+  meta.textContent = pct > 0 ? pct + "% read" : "Not started";
+  info.append(meta);
+
+  const bar = document.createElement("div");
+  bar.className = "card-progress";
+  const fill = document.createElement("div");
+  fill.style.width = pct + "%";
+  bar.append(fill);
+  info.append(bar);
+  card.append(info);
+
+  if (!big) {
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "book-checkbox";
+    cb.dataset.id = id;
+    cb.addEventListener("click", (e) => e.stopPropagation());
+    card.append(cb);
+
+    const del = document.createElement("button");
+    del.className = "delete-btn";
+    del.textContent = "✕";
+    del.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete "${data.title}"?`)) await deleteBooks([id]);
+    });
+    card.append(del);
   }
 
-  emptyMessage.style.display = "none";
-
-  bookIds.forEach((id) => {
-    const bookData = books[id];
-    const card = document.createElement("div");
-    card.className = "book-card";
-    card.innerHTML = `
-      <div class="book-info">
-        <h3>${bookData.title || "Untitled"}</h3>
-        <p>${bookData.author || "Unknown Author"}</p>
-      </div>
-      <button class="delete-btn" data-id="${id}">✕</button>
-    `;
-
-    card.addEventListener("click", (e) => {
-      if (e.target.classList.contains("delete-btn")) return;
-      openBook(id);
-    });
-
-    card.querySelector(".delete-btn").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (confirm("Delete this book?")) {
-        await deleteBook(id);
-      }
-    });
-
-    bookList.appendChild(card);
+  card.addEventListener("click", () => {
+    if (bookList.classList.contains("select-mode")) {
+      const cb = card.querySelector(".book-checkbox");
+      if (cb) cb.checked = !cb.checked;
+      return;
+    }
+    openBook(id);
   });
+  return card;
+}
+
+function renderLibrary() {
+  bookList.innerHTML = "";
+  continueSection.innerHTML = "";
+  const ids = Object.keys(library);
+  emptyMessage.style.display = ids.length ? "none" : "block";
+  if (!ids.length) return;
+
+  // Continue reading = most recently opened book that has progress
+  const recent = ids
+    .filter((id) => library[id].lastOpened && library[id].cfi)
+    .sort((a, b) => library[b].lastOpened - library[a].lastOpened)[0];
+  if (recent) {
+    const label = document.createElement("h2");
+    label.className = "section-label";
+    label.textContent = "Continue reading";
+    continueSection.append(label, makeCard(recent, library[recent], true));
+  }
+
+  ids
+    .sort(
+      (a, b) =>
+        (library[b].lastOpened || library[b].addedAt) -
+        (library[a].lastOpened || library[a].addedAt),
+    )
+    .forEach((id) => bookList.append(makeCard(id, library[id])));
 }
 
 async function handleFileSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  let added = 0;
 
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const bookId = "book_" + Date.now();
+  for (const file of files) {
+    try {
+      const buf = await file.arrayBuffer();
+      const temp = ePub(buf);
+      await temp.ready;
+      const meta = await temp.loaded.metadata;
+      temp.destroy();
 
-    // Temporary book to get metadata
-    const tempBook = ePub(arrayBuffer);
-    await tempBook.ready;
+      const title = (meta.title || file.name.replace(/\.epub$/i, "")).trim();
+      const author = meta.creator || "Unknown Author";
 
-    const metadata = await tempBook.loaded.metadata;
-    const title = metadata.title || file.name.replace(".epub", "");
-    const author = metadata.creator || "Unknown Author";
+      const dup = Object.values(library).some(
+        (b) => b.title.toLowerCase() === title.toLowerCase(),
+      );
+      if (dup && !confirm(`"${title}" already exists.\nAdd it anyway?`))
+        continue;
 
-    // Save book data
-    const books = (await localforage.getItem("books")) || {};
-    books[bookId] = {
-      title,
-      author,
-      data: arrayBuffer,
-      lastLocation: null,
-      addedAt: Date.now(),
-    };
-
-    await localforage.setItem("books", books);
-    await loadLibrary();
-
-    // Clear input
-    fileInput.value = "";
-  } catch (err) {
-    alert("Failed to load book: " + err.message);
-    console.error(err);
+      const id =
+        "book_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+      await localforage.setItem("file-" + id, buf);
+      library[id] = {
+        title,
+        author,
+        addedAt: Date.now(),
+        lastOpened: 0,
+        cfi: null,
+        percent: 0,
+      };
+      added++;
+    } catch (err) {
+      console.error("Failed to load:", file.name, err);
+      alert(
+        `Failed to load "${file.name}"` +
+          (err?.name === "QuotaExceededError" ? " (storage full)" : ""),
+      );
+    }
   }
+
+  await saveLibrary();
+  renderLibrary();
+  fileInput.value = "";
+  if (added) alert(`${added} book(s) added.`);
 }
 
-async function deleteBook(id) {
-  const books = (await localforage.getItem("books")) || {};
-  delete books[id];
-  await localforage.setItem("books", books);
-  await loadLibrary();
+async function deleteBooks(ids) {
+  for (const id of ids) {
+    delete library[id];
+    await localforage.removeItem("file-" + id);
+    await localforage.removeItem("locations-" + id);
+  }
+  await saveLibrary();
+  renderLibrary();
 }
 
-// READER FUNCTIONS
+function toggleSelectMode(enable) {
+  bookList.classList.toggle("select-mode", enable);
+  $("select-controls").style.display = enable ? "block" : "none";
+  $("delete-selected-btn").style.display = enable ? "inline-block" : "none";
+  $("select-mode-btn").textContent = enable ? "Cancel" : "Select";
+  $("select-all").checked = false;
+  document
+    .querySelectorAll(".book-checkbox")
+    .forEach((cb) => (cb.checked = false));
+}
+
+async function deleteSelectedBooks() {
+  const ids = Array.from(
+    document.querySelectorAll(".book-checkbox:checked"),
+  ).map((cb) => cb.dataset.id);
+  if (!ids.length) return alert("No books selected");
+  if (!confirm(`Delete ${ids.length} book(s)?`)) return;
+  await deleteBooks(ids);
+  toggleSelectMode(false);
+}
+
+// Reader functions
 async function openBook(id) {
   try {
-    const books = (await localforage.getItem("books")) || {};
-    const bookData = books[id];
-    if (!bookData) {
-      alert("Book not found");
-      return;
-    }
+    const buf = await localforage.getItem("file-" + id);
+    if (!buf) return alert("Book file not found");
 
+    destroyBook();
     currentBookId = id;
-
-    // Show reader view first
     libraryView.classList.add("hidden");
     readerView.classList.remove("hidden");
-    bookTitle.textContent = bookData.title || "Untitled";
+    $("book-title").textContent = library[id].title || "Untitled";
+    $("viewer").innerHTML = "";
+    progressFill.style.width = (library[id].percent || 0) * 100 + "%";
+    progressText.textContent = "";
 
-    // Destroy previous book
-    if (book) {
-      try {
-        book.destroy();
-      } catch (e) {}
-      book = null;
-      rendition = null;
-    }
+    const thisBook = ePub(buf);
+    book = thisBook;
+    await thisBook.ready;
 
-    // Clear viewer
-    const viewer = document.getElementById("viewer");
-    viewer.innerHTML = "";
-
-    // Create book
-    book = ePub(bookData.data);
-
-    // IMPORTANT: wait until the book is fully parsed
-    await book.ready;
-
-    // Now render
-    rendition = book.renderTo("viewer", {
+    rendition = thisBook.renderTo("viewer", {
       width: "100%",
       height: "100%",
       flow: "paginated",
       manager: "default",
     });
+    applyReaderTheme(settings.theme);
+    rendition.themes.fontSize(settings.fontSize + "%");
 
-    // Display
-    const location = bookData.lastLocation || 0;
-    await rendition.display(location);
+    rendition.on("relocated", (loc) => onRelocated(id, loc));
+    await rendition.display(library[id].cfi || undefined);
+    setTimeout(() => rendition?.resize(), 150);
 
-    // Force resize after a short delay (very important)
-    setTimeout(() => {
-      if (rendition) {
-        rendition.resize();
-      }
-    }, 150);
+    library[id].lastOpened = Date.now();
+    saveLibrary();
 
-    // Save progress
-    rendition.on("relocated", async (location) => {
-      try {
-        const books = (await localforage.getItem("books")) || {};
-        if (books[currentBookId]) {
-          books[currentBookId].lastLocation = location.start.cfi;
-          await localforage.setItem("books", books);
-        }
-        if (location.start.percentage) {
-          progressFill.style.width = location.start.percentage * 100 + "%";
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
-
-    changeFontSize(0);
+    prepareBookStats(id, thisBook); // locations + word count, in background
   } catch (err) {
     console.error("Error opening book:", err);
-    alert("Failed to open book. Try hard refresh (Ctrl + Shift + R).");
+    alert("Failed to open book: " + err.message);
+    showLibrary();
   }
 }
 
-function showLibrary() {
+function onRelocated(id, loc) {
+  if (id !== currentBookId || !book) return;
+
+  library[id].cfi = loc.start.cfi; // position is always saved
+  library[id].lastOpened = Date.now();
+
+  const pct = getPercent(loc);
+  if (pct === null) {
+    progressText.textContent = "Calculating progress…"; // bar stays where it was
+  } else {
+    library[id].percent = pct;
+    updateProgressUI(id, pct);
+  }
+
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveLibrary, 500);
+}
+
+function getPercent(loc) {
+  if (!book.locations?.length()) return null; // not ready yet
+  const p = book.locations.percentageFromCfi(loc.start.cfi);
+  return Number.isFinite(p) ? p : null;
+}
+
+function updateProgressUI(id, pct) {
+  progressFill.style.width = pct * 100 + "%";
+  const words = library[id].words;
+  let text = Math.round(pct * 100) + "%";
+  if (words) {
+    const mins = Math.round((words * (1 - pct)) / 230);
+    text += ` · ${words.toLocaleString()} words · ${mins >= 60 ? Math.floor(mins / 60) + "h " + (mins % 60) + "m" : mins + "m"} left`;
+  }
+  progressText.textContent = text;
+}
+
+async function prepareBookStats(id, thisBook) {
+  try {
+    // Locations (cached so it's only slow once)
+    const saved = await localforage.getItem("locations-" + id);
+    if (saved) thisBook.locations.load(saved);
+    else {
+      await thisBook.locations.generate(1600);
+      if (book === thisBook)
+        await localforage.setItem("locations-" + id, thisBook.locations.save());
+    }
+    if (book !== thisBook) return;
+
+    // Word count (once per book)
+    if (!library[id].words) {
+      let total = 0;
+      for (const item of thisBook.spine.spineItems) {
+        if (book !== thisBook) return;
+        const doc = await item.load(thisBook.load.bind(thisBook));
+        const text = item.document?.body?.textContent ?? doc?.textContent ?? "";
+        total += (text.match(/\S+/g) || []).length;
+        item.unload();
+      }
+      library[id].words = total;
+      saveLibrary();
+    }
+
+    const loc = rendition?.currentLocation();
+    if (loc?.start) onRelocated(id, loc);
+  } catch (err) {
+    console.error("Stats failed:", err);
+  }
+}
+
+function destroyBook() {
+  if (book) {
+    try {
+      book.destroy();
+    } catch (e) {}
+  }
+  book = null;
+  rendition = null;
+}
+
+async function showLibrary() {
+  clearTimeout(saveTimer);
+  await saveLibrary();
+  destroyBook();
+  currentBookId = null;
   readerView.classList.add("hidden");
   libraryView.classList.remove("hidden");
   settingsPanel.classList.add("hidden");
-
-  if (book) {
-    book.destroy();
-    book = null;
-    rendition = null;
-  }
+  renderLibrary();
 }
 
 //  SETTINGS
 function changeFontSize(delta) {
-  currentFontSize = Math.max(70, Math.min(160, currentFontSize + delta));
-  fontSizeValue.textContent = currentFontSize + "%";
+  settings.fontSize = Math.max(70, Math.min(160, settings.fontSize + delta));
+  fontSizeValue.textContent = settings.fontSize + "%";
+  rendition?.themes.fontSize(settings.fontSize + "%");
+  saveSettings();
+}
 
-  if (rendition) {
-    rendition.themes.fontSize(currentFontSize + "%");
-  }
+function applyBodyTheme(theme) {
+  document.body.className = theme === "light" ? "" : "theme-" + theme;
+}
+
+function applyReaderTheme(theme) {
+  if (!rendition) return;
+  const colors = {
+    dark: ["#e0e0e0", "#1a1a1a"],
+    sepia: ["#5b4636", "#f4ecd8"],
+    light: ["#000", "#fff"],
+  }[theme] || ["#000", "#fff"];
+  rendition.themes.override("color", colors[0]);
+  rendition.themes.override("background", colors[1]);
 }
 
 function setTheme(theme) {
-  document.body.className = ""; // reset
-  if (theme !== "light") {
-    document.body.classList.add("theme-" + theme);
-  }
-
-  if (rendition) {
-    if (theme === "dark") {
-      rendition.themes.override("color", "#e0e0e0");
-      rendition.themes.override("background", "#1a1a1a");
-    } else if (theme === "sepia") {
-      rendition.themes.override("color", "#5b4636");
-      rendition.themes.override("background", "#f4ecd8");
-    } else {
-      rendition.themes.override("color", "#000");
-      rendition.themes.override("background", "#fff");
-    }
-  }
-}
-
-//  MASS ADD
-async function handleFileSelect(e) {
-  const files = Array.from(e.target.files);
-  if (files.length === 0) return;
-
-  const books = (await localforage.getItem("books")) || {};
-  let addedCount = 0;
-
-  for (const file of files) {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const tempBook = ePub(arrayBuffer);
-      await tempBook.ready;
-
-      const metadata = await tempBook.loaded.metadata;
-      const title = (metadata.title || file.name.replace(".epub", "")).trim();
-      const author = metadata.creator || "Unknown Author";
-
-      // Check for duplicate title (case-insensitive)
-      const existingId = Object.keys(books).find(
-        (id) => books[id].title.toLowerCase() === title.toLowerCase(),
-      );
-
-      if (existingId) {
-        const confirmAdd = confirm(
-          `A book named "${title}" already exists.\nDo you want to add it anyway?`,
-        );
-        if (!confirmAdd) continue;
-      }
-
-      const bookId =
-        "book_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-
-      books[bookId] = {
-        title,
-        author,
-        data: arrayBuffer,
-        lastLocation: null,
-        addedAt: Date.now(),
-      };
-
-      addedCount++;
-    } catch (err) {
-      console.error("Failed to load:", file.name, err);
-      alert(`Failed to load "${file.name}"`);
-    }
-  }
-
-  await localforage.setItem("books", books);
-  await loadLibrary();
-  fileInput.value = "";
-
-  if (addedCount > 0) {
-    alert(`${addedCount} book(s) added successfully.`);
-  }
-}
-
-//  MASS DELETE
-function toggleSelectMode(enable) {
-  const selectControls = document.getElementById("select-controls");
-  const deleteBtn = document.getElementById("delete-selected-btn");
-  const selectModeBtn = document.getElementById("select-mode-btn");
-
-  selectControls.style.display = enable ? "block" : "none";
-  deleteBtn.style.display = enable ? "inline-block" : "none";
-  selectModeBtn.textContent = enable ? "Cancel" : "Select";
-
-  document.querySelectorAll(".book-checkbox").forEach((cb) => {
-    cb.style.display = enable ? "block" : "none";
-    cb.checked = false;
-  });
-
-  document.getElementById("select-all").checked = false;
-}
-
-async function deleteSelectedBooks() {
-  const checkboxes = document.querySelectorAll(".book-checkbox:checked");
-  if (checkboxes.length === 0) {
-    alert("No books selected");
-    return;
-  }
-
-  const confirmDelete = confirm(
-    `Are you sure you want to delete ${checkboxes.length} book(s)?`,
-  );
-  if (!confirmDelete) return;
-
-  const books = (await localforage.getItem("books")) || {};
-
-  checkboxes.forEach((cb) => {
-    delete books[cb.dataset.id];
-  });
-
-  await localforage.setItem("books", books);
-  await loadLibrary();
-  toggleSelectMode(false);
-}
-
-//  UPDATED loadLibrary
-async function loadLibrary() {
-  const books = (await localforage.getItem("books")) || {};
-  bookList.innerHTML = "";
-
-  const bookIds = Object.keys(books);
-
-  if (bookIds.length === 0) {
-    emptyMessage.style.display = "block";
-    document.getElementById("select-controls").style.display = "none";
-    return;
-  }
-
-  emptyMessage.style.display = "none";
-
-  bookIds.forEach((id) => {
-    const bookData = books[id];
-    const card = document.createElement("div");
-    card.className = "book-card";
-    card.innerHTML = `
-      <div class="book-info">
-        <h3>${bookData.title || "Untitled"}</h3>
-        <p>${bookData.author || "Unknown Author"}</p>
-      </div>
-      <button class="delete-btn" data-id="${id}">✕</button>
-    `;
-
-    card.addEventListener("click", (e) => {
-      if (
-        e.target.classList.contains("delete-btn") ||
-        e.target.classList.contains("book-checkbox")
-      )
-        return;
-      openBook(id);
-    });
-
-    card.querySelector(".delete-btn").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      if (confirm(`Delete "${bookData.title}"?`)) {
-        await deleteBook(id);
-      }
-    });
-
-    bookList.appendChild(card);
-  });
+  settings.theme = theme;
+  applyBodyTheme(theme);
+  applyReaderTheme(theme);
+  saveSettings();
 }

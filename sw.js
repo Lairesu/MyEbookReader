@@ -17,7 +17,9 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
+      .then((cache) =>
+        cache.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" }))),
+      )
       .then(() => self.skipWaiting()), // activate immediately
   );
 });
@@ -45,42 +47,28 @@ self.addEventListener("activate", (event) => {
 // Fetch strategy
 self.addEventListener("fetch", (event) => {
   const request = event.request;
-
-  // Never interfere with these:
-  if (
-    request.url.startsWith("blob:") ||
-    request.url.startsWith("data:") ||
-    request.method !== "GET"
-  ) {
-    return; // let the browser handle it normally
-  }
+  if (request.method !== "GET" || !request.url.startsWith(self.location.origin))
+    return;
 
   event.respondWith(
-    caches.match(request, { ignoreSearch: true }).then((cached) => {
-      if (cached) {
-        return cached; // serve from cache (offline works)
-      }
-
-      // Not in cache → try network
-      return fetch(request)
-        .then((response) => {
-          // Only cache successful responses of our own files
-          if (
-            response &&
-            response.status === 200 &&
-            request.url.startsWith(self.location.origin)
-          ) {
-            const responseClone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(request, responseClone);
-            });
-          }
-          return response;
-        })
-        .catch(() => {
-          if (request.mode === "navigate") return caches.match("./index.html");
-          return new Response("Offline", { status: 503 });
-        });
-    }),
+    fetch(request, { cache: "no-cache" })
+      .then((response) => {
+        if (response.status === 200) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches
+          .match(request, { ignoreSearch: true })
+          .then(
+            (cached) =>
+              cached ||
+              (request.mode === "navigate"
+                ? caches.match("./index.html")
+                : new Response("Offline", { status: 503 })),
+          ),
+      ),
   );
 });

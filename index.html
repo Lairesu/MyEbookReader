@@ -23,7 +23,6 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
-    <!-- LIBRARY VIEW  -->
     <!-- Library View -->
     <div id="library-view">
       <header class="header">
@@ -47,7 +46,10 @@
 
       <input type="file" id="file-input" accept=".epub" multiple hidden />
 
+      <div id="continue-section"></div>
       <div id="book-list" class="book-list"></div>
+
+      <p id="empty-message" class="empty-message"></p>
 
       <p id="empty-message" class="empty-message">
         No books yet.<br />
@@ -67,8 +69,9 @@
 
       <div class="reader-controls">
         <button id="prev-btn" class="btn-icon">‹</button>
-        <div id="progress-bar">
-          <div id="progress-fill"></div>
+        <div class="progress-wrap">
+          <div id="progress-bar"><div id="progress-fill"></div></div>
+          <div id="progress-text"></div>
         </div>
         <button id="next-btn" class="btn-icon">›</button>
       </div>
