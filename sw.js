@@ -1,50 +1,44 @@
-const CACHE_NAME = "ebook-reader-v3"; // ← change version number when you update code
+const CACHE_NAME = "ebook-reader-v6"; // bump when ASSETS change
 
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./highlights.js",
   "./manifest.json",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
   "./libs/epub.min.js",
   "./libs/jszip.min.js",
   "./libs/localforage.min.js",
 ];
 
-// Install - cache the app shell
 self.addEventListener("install", (event) => {
-  console.log("[SW] Installing new version...");
   event.waitUntil(
     caches
       .open(CACHE_NAME)
       .then((cache) =>
         cache.addAll(ASSETS.map((u) => new Request(u, { cache: "reload" }))),
       )
-      .then(() => self.skipWaiting()), // activate immediately
+      .then(() => self.skipWaiting()),
   );
 });
 
-// Activate - delete old caches
 self.addEventListener("activate", (event) => {
-  console.log("[SW] Activating...");
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => {
-        return Promise.all(
-          keys.map((key) => {
-            if (key !== CACHE_NAME) {
-              console.log("[SW] Deleting old cache:", key);
-              return caches.delete(key);
-            }
-          }),
-        );
-      })
+      .then((keys) =>
+        Promise.all(
+          keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
 
-// Fetch strategy
+// Network first (always fresh code when online), cache as offline fallback
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET" || !request.url.startsWith(self.location.origin))

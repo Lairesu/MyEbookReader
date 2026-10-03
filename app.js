@@ -1,8 +1,8 @@
-// global variables - State
+// state
 let book = null;
 let rendition = null;
 let currentBookId = null;
-let library = {};
+let library = {}; // id -> {title, author, addedAt, lastOpened, cfi, percent, words}
 let settings = { fontSize: 100, theme: "light" };
 let saveTimer = null;
 
@@ -22,7 +22,7 @@ const fontSizeValue = $("font-size-value");
 const saveLibrary = () => localforage.setItem("library", library);
 const saveSettings = () => localforage.setItem("settings", settings);
 
-// moving old single-"books" storage into the new split format which runs once
+// Move old single-"books" storage into the new split format (runs once)
 async function migrate() {
   const old = await localforage.getItem("books");
   if (!old) return;
@@ -42,7 +42,7 @@ async function migrate() {
   await localforage.removeItem("books"); // only after everything succeeded
 }
 
-// starting
+// startup
 document.addEventListener("DOMContentLoaded", async () => {
   if ("serviceWorker" in navigator) {
     try {
@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 });
 
-// Library
+// library
 function makeCard(id, data, big = false) {
   const card = document.createElement("div");
   card.className = "book-card" + (big ? " continue-card" : "");
@@ -237,6 +237,7 @@ async function deleteBooks(ids) {
     delete library[id];
     await localforage.removeItem("file-" + id);
     await localforage.removeItem("locations-" + id);
+    await localforage.removeItem("notes-" + id);
   }
   await saveLibrary();
   renderLibrary();
@@ -263,7 +264,7 @@ async function deleteSelectedBooks() {
   toggleSelectMode(false);
 }
 
-// Reader functions
+// reader
 async function openBook(id) {
   try {
     const buf = await localforage.getItem("file-" + id);
@@ -292,8 +293,11 @@ async function openBook(id) {
     rendition.themes.fontSize(settings.fontSize + "%");
 
     rendition.on("relocated", (loc) => onRelocated(id, loc));
+    const cachedLoc = await localforage.getItem("locations-" + id);
+    if (cachedLoc) thisBook.locations.load(cachedLoc);
     await rendition.display(library[id].cfi || undefined);
     setTimeout(() => rendition?.resize(), 150);
+    initHighlights(id);
 
     library[id].lastOpened = Date.now();
     saveLibrary();
@@ -308,20 +312,16 @@ async function openBook(id) {
 
 function onRelocated(id, loc) {
   if (id !== currentBookId || !book) return;
-
-  library[id].cfi = loc.start.cfi; // position is always saved
+  library[id].cfi = loc.start.cfi;
   library[id].lastOpened = Date.now();
-
   const pct = getPercent(loc);
-  if (pct === null) {
-    progressText.textContent = "Calculating progress…"; // bar stays where it was
-  } else {
+  if (pct === null) progressText.textContent = "Calculating progress…";
+  else {
     library[id].percent = pct;
     updateProgressUI(id, pct);
   }
-
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveLibrary, 500);
+  saveTimer = setTimeout(saveLibrary, 500); // debounce writes
 }
 
 function getPercent(loc) {
@@ -375,6 +375,7 @@ async function prepareBookStats(id, thisBook) {
 }
 
 function destroyBook() {
+  closeHighlights();
   if (book) {
     try {
       book.destroy();
@@ -395,7 +396,7 @@ async function showLibrary() {
   renderLibrary();
 }
 
-//  SETTINGS
+// settings
 function changeFontSize(delta) {
   settings.fontSize = Math.max(70, Math.min(160, settings.fontSize + delta));
   fontSizeValue.textContent = settings.fontSize + "%";

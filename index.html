@@ -23,6 +23,7 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
+    <!-- LIBRARY VIEW  -->
     <!-- Library View -->
     <div id="library-view">
       <header class="header">
@@ -49,8 +50,6 @@
       <div id="continue-section"></div>
       <div id="book-list" class="book-list"></div>
 
-      <p id="empty-message" class="empty-message"></p>
-
       <p id="empty-message" class="empty-message">
         No books yet.<br />
         Click "+ Add Books" to load EPUB files.
@@ -62,6 +61,20 @@
       <header class="reader-header">
         <button id="back-btn" class="btn-icon">←</button>
         <div id="book-title" class="book-title">Loading...</div>
+        <button id="hl-list-btn" class="btn-icon" title="Highlights">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
+          </svg>
+        </button>
         <button id="menu-btn" class="btn-icon">☰</button>
       </header>
 
@@ -74,6 +87,15 @@
           <div id="progress-text"></div>
         </div>
         <button id="next-btn" class="btn-icon">›</button>
+      </div>
+    </div>
+
+    <!--  HIGHLIGHTS PANEL  -->
+    <div id="hl-panel" class="settings-panel hidden">
+      <div class="settings-content">
+        <h2 id="hl-panel-title">Highlights</h2>
+        <div id="hl-list"></div>
+        <button id="close-hl-panel" class="btn full-width">Close</button>
       </div>
     </div>
 
@@ -104,7 +126,18 @@
       </div>
     </div>
 
+    <!-- Highlight color bar -->
+    <div id="hl-bar" class="hidden">
+      <span id="hl-colors"></span>
+      <input type="color" id="hl-custom" value="#a855f7" title="Custom color" />
+      <button id="hl-delete" class="hl-act" title="Delete highlight">
+        Remove
+      </button>
+      <button id="hl-cancel" class="hl-act" title="Close">✕</button>
+    </div>
+
     <!-- Main App Logic -->
     <script src="app.js"></script>
+    <script src="highlights.js"></script>
   </body>
 </html>
