@@ -336,19 +336,19 @@ async function turnPage(dir) {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     v.style.transition = "transform 110ms ease-in, opacity 110ms ease-in";
-    v.style.transform = `translateX(${-dir * 40}px)`;
+    v.style.transform = `translateX(${-dir * 20}px)`;
     v.style.opacity = "0";
-    await wait(110);
+    await wait(100);
 
     await (dir > 0 ? rendition.next() : rendition.prev());
 
     v.style.transition = "none"; // jump to the entry side without animating
-    v.style.transform = `translateX(${dir * 40}px)`;
+    v.style.transform = `translateX(${dir * 20}px)`;
     void v.offsetWidth; // force the browser to apply it before animating back
     v.style.transition = "transform 160ms ease-out, opacity 160ms ease-out";
     v.style.transform = "translateX(0)";
     v.style.opacity = "1";
-    await wait(160);
+    await wait(150);
   } finally {
     // always leave the page visible, even if the turn failed
     v.style.transition = "";

@@ -12,6 +12,7 @@ body {
   background-color: #f5f5f5;
   color: #222;
   height: 100vh;
+  height: 100dvh; /* phones: 100vh is taller than the visible screen */
   overflow: hidden;
 }
 
@@ -52,6 +53,7 @@ body {
 /* LIBRARY VIEW  */
 #library-view {
   height: 100vh;
+  height: 100dvh; /* phones: 100vh is taller than the visible screen */
   display: flex;
   flex-direction: column;
   padding: 16px;
@@ -131,7 +133,8 @@ body {
 .empty-message {
   text-align: center;
   color: #888;
-  margin-top: 80px;
+  margin: auto 0; /* centers it in the free space of the flex column */
+  padding: 12vh 16px 0; /* nudges it a little below the middle */
   font-size: 16px;
   line-height: 1.6;
 }
@@ -139,6 +142,7 @@ body {
 /* READER VIEW  */
 #reader-view {
   height: 100vh;
+  height: 100dvh; /* phones: 100vh is taller than the visible screen */
   display: flex;
   flex-direction: column;
 }
@@ -536,7 +540,7 @@ body.theme-dark #hl-bar {
   border: none;
   color: #ef4444;
   cursor: pointer;
-  
+
   font-size: 14px;
 }
 .notes-empty {
@@ -552,4 +556,41 @@ body.theme-dark .note-row {
 /* Bookmarks */
 .btn-icon svg {
   display: block;
+}
+
+/* empty library: let the message use the free space instead of an empty grid */
+.book-list:empty {
+  display: none;
+}
+
+/* header wraps on narrow screens */
+.header {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.header-buttons {
+  flex-wrap: wrap;
+}
+
+/* backup panel */
+.backup-help {
+  font-size: 13px;
+  color: #888;
+  line-height: 1.5;
+}
+#backup-status {
+  font-size: 13px;
+  color: #888;
+  text-align: center;
+  margin-top: 12px;
+  min-height: 18px;
+}
+.settings-content button:disabled {
+  opacity: 0.5;
+}
+
+/* library header should blend into the page in dark mode */
+body.theme-dark .header {
+  background-color: transparent;
+  border-color: transparent;
 }

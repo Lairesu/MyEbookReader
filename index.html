@@ -23,12 +23,12 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
-    <!-- LIBRARY VIEW  -->
     <!-- Library View -->
     <div id="library-view">
       <header class="header">
         <h1>My Books</h1>
         <div class="header-buttons">
+          <button id="backup-btn" class="btn btn-secondary">Backup</button>
           <button id="select-mode-btn" class="btn btn-secondary">Select</button>
           <button id="add-book-btn" class="btn">+ Add Books</button>
           <button
@@ -50,9 +50,10 @@
       <div id="continue-section"></div>
       <div id="book-list" class="book-list"></div>
 
-      <p id="empty-message" class="empty-message">
+      <p id="empty-message" class="empty-message" style="display: none">
         No books yet.<br />
-        Click "+ Add Books" to load EPUB files.
+        Tap "+ Add Books" to load EPUB files,<br />or open Backup to restore a
+        saved library.
       </p>
     </div>
 
@@ -99,6 +100,29 @@
       </div>
     </div>
 
+    <!--  BACKUP PANEL  -->
+    <div id="backup-panel" class="settings-panel hidden">
+      <div class="settings-content">
+        <h2>Backup</h2>
+        <p class="backup-help">
+          Your books live only in this browser. Export a file to keep a copy or
+          move your library to another device.
+        </p>
+        <button id="export-full" class="btn full-width">
+          Export everything (books + highlights)
+        </button>
+        <button id="export-notes" class="btn btn-secondary full-width">
+          Export highlights and progress only
+        </button>
+        <button id="import-btn" class="btn btn-secondary full-width">
+          Import backup
+        </button>
+        <input type="file" id="import-input" accept=".zip" hidden />
+        <p id="backup-status"></p>
+        <button id="close-backup" class="btn full-width">Close</button>
+      </div>
+    </div>
+
     <!--  SETTINGS PANEL  -->
     <div id="settings-panel" class="settings-panel hidden">
       <div class="settings-content">
@@ -139,5 +163,6 @@
     <!-- Main App Logic -->
     <script src="app.js"></script>
     <script src="highlights.js"></script>
+    <script src="backup.js"></script>
   </body>
 </html>
