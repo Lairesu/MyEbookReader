@@ -536,6 +536,7 @@ body.theme-dark #hl-bar {
   border: none;
   color: #ef4444;
   cursor: pointer;
+  
   font-size: 14px;
 }
 .notes-empty {
