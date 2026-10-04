@@ -594,3 +594,243 @@ body.theme-dark .header {
   background-color: transparent;
   border-color: transparent;
 }
+
+/* icons */
+.icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+.hl-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  color: inherit;
+}
+.hl-act:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+.hl-act.danger {
+  color: #ef4444;
+}
+.hl-act .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.note-edit,
+.note-del {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+.note-edit:hover,
+.note-del:hover {
+  background: rgba(128, 128, 128, 0.18);
+}
+.note-edit .icon,
+.note-del .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.note-body {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.note-body .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.delete-btn .icon {
+  width: 14px;
+  height: 14px;
+}
+
+/* side drawer */
+#drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 109;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#drawer-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(88vw, 380px);
+  background: #f0f0f0;
+  color: #222;
+  z-index: 110;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform 0.25s ease,
+    visibility 0s 0.25s;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.3);
+}
+#drawer.open {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.25s ease;
+}
+
+.drawer-top {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #ddd;
+}
+.drawer-tabs {
+  display: flex;
+  flex: 1;
+}
+.drawer-tab {
+  flex: 1;
+  padding: 14px 4px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #777;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.drawer-tab.active {
+  color: inherit;
+  border-bottom-color: #f59e0b;
+}
+.drawer-tab .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+}
+#hl-list {
+  padding: 10px;
+}
+#drawer-footer {
+  padding: 10px 14px;
+  border-top: 1px solid #ddd;
+  font-size: 13px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.toc-row {
+  padding: 14px 16px;
+  border-bottom: 1px dashed #ccc;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1.35;
+}
+.toc-row:hover {
+  background: rgba(59, 130, 246, 0.08);
+}
+.toc-row.current {
+  background: rgba(245, 158, 11, 0.15);
+  font-weight: 600;
+  border-left: 4px solid #f59e0b;
+}
+
+.img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 6px;
+  padding: 8px;
+}
+.img-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #ddd;
+}
+#img-more {
+  width: calc(100% - 16px);
+  margin: 8px;
+}
+
+#lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+body.theme-dark #drawer {
+  background: #1e1e1e;
+  color: #e0e0e0;
+}
+body.theme-dark .drawer-top,
+body.theme-dark #drawer-footer,
+body.theme-dark .toc-row {
+  border-color: #333;
+}
+body.theme-dark #drawer-footer {
+  color: #aaa;
+}
+
+.note-row {
+  padding-right: 72px;
+}
+.note-edit {
+  position: absolute;
+  top: 8px;
+  right: 38px;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.note-body {
+  margin-top: 6px;
+  font-size: 13px;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+#hl-bar {
+  max-width: calc(100vw - 16px);
+  flex-wrap: wrap;
+  justify-content: center;
+  border-radius: 24px; /* a full pill shape looks odd once it wraps */
+}

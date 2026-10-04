@@ -137,7 +137,7 @@ function makeCard(id, data, big = false) {
 
     const del = document.createElement("button");
     del.className = "delete-btn";
-    del.textContent = "✕";
+    del.innerHTML = ICONS.close;
     del.addEventListener("click", async (e) => {
       e.stopPropagation();
       if (confirm(`Delete "${data.title}"?`)) await deleteBooks([id]);

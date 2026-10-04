@@ -1,4 +1,3 @@
-// highlights.js - step 1: select text, pick a color, change color, delete
 // Uses globals from app.js: book, rendition, currentBookId
 
 const HL_COLORS = {
@@ -31,25 +30,37 @@ async function initHighlights(id) {
 
 function closeHighlights() {
   closeBar();
-  hlEl("hl-panel")?.classList.add("hidden");
+  if (typeof resetDrawer === "function") resetDrawer();
   hlBookId = null;
   highlights = [];
 }
 
 function drawHighlight(h) {
-  rendition.annotations.remove(h.cfiRange, "highlight"); // avoid duplicates
-  rendition.annotations.highlight(
-    h.cfiRange,
-    {},
-    () => openBar({ cfiRange: h.cfiRange, contents: null, existing: h }),
-    "hl",
-    { fill: HL_COLORS[h.color] || h.color, "fill-opacity": "0.4" },
-  );
+  eraseHighlight(h); // avoid duplicates
+  const open = () =>
+    openBar({ cfiRange: h.cfiRange, contents: null, existing: h });
+  rendition.annotations.highlight(h.cfiRange, {}, open, "hl", {
+    fill: HL_COLORS[h.color] || h.color,
+    "fill-opacity": "0.4",
+  });
+  // highlights with a note also get a thin underline so they stand out on the page
+  if (h.note) {
+    rendition.annotations.underline(h.cfiRange, {}, open, "hl-note", {
+      stroke: "#555",
+      "stroke-opacity": "0.8",
+    });
+  }
+}
+
+function eraseHighlight(h) {
+  rendition.annotations.remove(h.cfiRange, "highlight");
+  rendition.annotations.remove(h.cfiRange, "underline");
 }
 
 function openBar(state) {
   activeHl = state;
-  hlEl("hl-delete").style.display = state.existing ? "inline-block" : "none";
+  hlEl("hl-delete").style.display = state.existing ? "" : "none";
+  hlEl("hl-note").style.display = state.existing ? "" : "none";
   hlEl("hl-bar").classList.remove("hidden");
 }
 
@@ -97,7 +108,7 @@ async function pickColor(name) {
 async function deleteHighlight() {
   const h = activeHl?.existing;
   if (!h) return;
-  rendition.annotations.remove(h.cfiRange, "highlight");
+  eraseHighlight(h);
   highlights = highlights.filter((x) => x !== h);
   await saveHighlights();
   closeBar();
@@ -118,12 +129,9 @@ document.addEventListener("DOMContentLoaded", () => {
     pickColor(e.target.value),
   ); // change, not input, so dragging the wheel saves once
   hlEl("hl-delete").addEventListener("click", deleteHighlight);
-  hlEl("hl-list-btn").addEventListener("click", () => {
-    renderHlPanel();
-    hlEl("hl-panel").classList.remove("hidden");
-  });
-  hlEl("close-hl-panel").addEventListener("click", () =>
-    hlEl("hl-panel").classList.add("hidden"),
+  hlEl("hl-note").addEventListener(
+    "click",
+    () => activeHl?.existing && editNoteFor(activeHl.existing),
   );
   hlEl("hl-cancel").addEventListener("click", closeBar);
 });
@@ -144,7 +152,6 @@ function renderHlPanel() {
   const list = hlEl("hl-list");
   if (!list) return;
   list.innerHTML = "";
-  hlEl("hl-panel-title").textContent = `Highlights (${highlights.length})`;
 
   if (!highlights.length) {
     const p = document.createElement("p");
@@ -168,13 +175,33 @@ function renderHlPanel() {
     date.textContent = new Date(h.createdAt).toLocaleDateString();
     row.append(text, date);
 
+    if (h.note) {
+      const note = document.createElement("div");
+      note.className = "note-body";
+      note.innerHTML = ICONS.note;
+      const noteText = document.createElement("span");
+      noteText.textContent = h.note;
+      note.append(noteText);
+      row.append(note);
+    }
+
+    const edit = document.createElement("button");
+    edit.className = "note-edit";
+    edit.innerHTML = ICONS.edit;
+    edit.title = "Add or edit note";
+    edit.addEventListener("click", (e) => {
+      e.stopPropagation(); // don't also jump to it
+      editNoteFor(h);
+    });
+    row.append(edit);
+
     const del = document.createElement("button");
     del.className = "note-del";
-    del.textContent = "✕";
+    del.innerHTML = ICONS.trash;
     del.addEventListener("click", async (e) => {
       e.stopPropagation(); // don't also jump to it
       if (!confirm("Delete this highlight?")) return;
-      rendition.annotations.remove(h.cfiRange, "highlight");
+      eraseHighlight(h);
       highlights = highlights.filter((x) => x !== h);
       await saveHighlights();
       renderHlPanel();
@@ -183,8 +210,22 @@ function renderHlPanel() {
 
     row.addEventListener("click", () => {
       rendition?.display(h.cfiRange);
-      hlEl("hl-panel").classList.add("hidden");
+      closeDrawer();
     });
     list.append(row);
   });
+}
+
+// add, change or remove (empty text) the note of one highlight
+async function editNoteFor(h) {
+  const text = prompt(
+    "Note for this highlight (leave empty to remove):",
+    h.note || "",
+  );
+  if (text === null) return; // cancelled
+  h.note = text.trim();
+  drawHighlight(h); // redraw so the underline appears or disappears
+  await saveHighlights();
+  closeBar();
+  renderHlPanel();
 }

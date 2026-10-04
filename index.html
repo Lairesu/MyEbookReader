@@ -23,6 +23,7 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
+    <!-- LIBRARY VIEW  -->
     <!-- Library View -->
     <div id="library-view">
       <header class="header">
@@ -60,45 +61,92 @@
     <!--  READER VIEW  -->
     <div id="reader-view" class="hidden">
       <header class="reader-header">
-        <button id="back-btn" class="btn-icon">←</button>
+        <button
+          id="back-btn"
+          class="btn-icon"
+          data-icon="back"
+          title="Back"
+          aria-label="Back"
+        ></button>
+        <button
+          id="drawer-btn"
+          class="btn-icon"
+          data-icon="menu"
+          title="Chapters, bookmarks, images"
+          aria-label="Open menu"
+        ></button>
         <div id="book-title" class="book-title">Loading...</div>
-        <button id="hl-list-btn" class="btn-icon" title="Highlights">
-          <svg
-            width="22"
-            height="22"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
-          </svg>
-        </button>
-        <button id="menu-btn" class="btn-icon">☰</button>
+        <button
+          id="menu-btn"
+          class="btn-icon"
+          data-icon="settings"
+          title="Settings"
+          aria-label="Settings"
+        ></button>
       </header>
 
       <div id="viewer"></div>
 
       <div class="reader-controls">
-        <button id="prev-btn" class="btn-icon">‹</button>
+        <button
+          id="prev-btn"
+          class="btn-icon"
+          data-icon="left"
+          title="Previous page"
+          aria-label="Previous page"
+        ></button>
         <div class="progress-wrap">
           <div id="progress-bar"><div id="progress-fill"></div></div>
           <div id="progress-text"></div>
         </div>
-        <button id="next-btn" class="btn-icon">›</button>
+        <button
+          id="next-btn"
+          class="btn-icon"
+          data-icon="right"
+          title="Next page"
+          aria-label="Next page"
+        ></button>
       </div>
     </div>
 
-    <!--  HIGHLIGHTS PANEL  -->
-    <div id="hl-panel" class="settings-panel hidden">
-      <div class="settings-content">
-        <h2 id="hl-panel-title">Highlights</h2>
-        <div id="hl-list"></div>
-        <button id="close-hl-panel" class="btn full-width">Close</button>
+    <!--  SIDE DRAWER: chapters, bookmarks (highlights), images  -->
+    <div id="drawer-backdrop"></div>
+    <aside id="drawer" aria-label="Book menu">
+      <div class="drawer-top">
+        <button
+          id="drawer-close"
+          class="btn-icon"
+          data-icon="back"
+          aria-label="Close menu"
+        ></button>
+        <div class="drawer-tabs">
+          <button class="drawer-tab active" data-tab="chapters">
+            Chapters
+          </button>
+          <button class="drawer-tab" data-tab="bookmarks">Bookmarks</button>
+          <button
+            class="drawer-tab"
+            data-tab="images"
+            data-icon="image"
+            aria-label="Images"
+          ></button>
+        </div>
+        <button
+          id="sort-toc"
+          class="btn-icon"
+          data-icon="sort"
+          title="Reverse order"
+          aria-label="Reverse chapter order"
+        ></button>
       </div>
-    </div>
+      <div class="drawer-body">
+        <div id="toc-list" class="drawer-view"></div>
+        <div id="hl-list" class="drawer-view hidden"></div>
+        <div id="img-list" class="drawer-view hidden"></div>
+      </div>
+      <div id="drawer-footer"></div>
+    </aside>
+    <div id="lightbox" class="hidden"><img id="lightbox-img" alt="" /></div>
 
     <!--  BACKUP PANEL  -->
     <div id="backup-panel" class="settings-panel hidden">
@@ -154,15 +202,34 @@
     <div id="hl-bar" class="hidden">
       <span id="hl-colors"></span>
       <input type="color" id="hl-custom" value="#a855f7" title="Custom color" />
-      <button id="hl-delete" class="hl-act" title="Delete highlight">
-        Remove
-      </button>
-      <button id="hl-cancel" class="hl-act" title="Close">✕</button>
+      <button
+        id="hl-note"
+        class="hl-act"
+        data-icon="note"
+        title="Add or edit note"
+        aria-label="Note"
+      ></button>
+      <button
+        id="hl-delete"
+        class="hl-act danger"
+        data-icon="trash"
+        title="Remove highlight"
+        aria-label="Remove highlight"
+      ></button>
+      <button
+        id="hl-cancel"
+        class="hl-act"
+        data-icon="close"
+        title="Close"
+        aria-label="Close"
+      ></button>
     </div>
 
     <!-- Main App Logic -->
+    <script src="icons.js"></script>
     <script src="app.js"></script>
     <script src="highlights.js"></script>
     <script src="backup.js"></script>
+    <script src="toc.js"></script>
   </body>
 </html>
