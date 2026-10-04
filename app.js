@@ -293,6 +293,25 @@ async function openBook(id) {
     rendition.themes.fontSize(settings.fontSize + "%");
 
     rendition.on("relocated", (loc) => onRelocated(id, loc));
+    
+    // swipe left = next page, swipe right = previous page
+    let touchX = 0;
+    let touchY = 0;
+    rendition.on("touchstart", (e) => {
+      touchX = e.changedTouches[0].screenX;
+      touchY = e.changedTouches[0].screenY;
+    });
+    rendition.on("touchend", (e, contents) => {
+      // skip if text is selected, so selecting text to highlight doesn't turn the page
+      if (contents?.window.getSelection().toString()) return;
+      const dx = e.changedTouches[0].screenX - touchX;
+      const dy = e.changedTouches[0].screenY - touchY;
+      // must be mostly horizontal and long enough, so scrolling and taps are ignored
+      if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      if (dx < 0) rendition.next();
+      else rendition.prev();
+    });
+
     const cachedLoc = await localforage.getItem("locations-" + id);
     if (cachedLoc) thisBook.locations.load(cachedLoc);
     await rendition.display(library[id].cfi || undefined);
