@@ -73,8 +73,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("close-settings").addEventListener("click", () =>
     settingsPanel.classList.add("hidden"),
   );
-  $("prev-btn").addEventListener("click", () => rendition?.prev());
-  $("next-btn").addEventListener("click", () => rendition?.next());
+  $("prev-btn").addEventListener("click", () => turnPage(-1));
+  $("next-btn").addEventListener("click", () => turnPage(1));
   $("font-decrease").addEventListener("click", () => changeFontSize(-10));
   $("font-increase").addEventListener("click", () => changeFontSize(10));
   document
@@ -85,8 +85,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.addEventListener("keydown", (e) => {
     if (readerView.classList.contains("hidden")) return;
-    if (e.key === "ArrowLeft") rendition?.prev();
-    if (e.key === "ArrowRight") rendition?.next();
+    if (e.key === "ArrowLeft") turnPage(-1);
+    if (e.key === "ArrowRight") turnPage(1);
   });
 
   $("select-mode-btn").addEventListener("click", () =>
@@ -293,7 +293,7 @@ async function openBook(id) {
     rendition.themes.fontSize(settings.fontSize + "%");
 
     rendition.on("relocated", (loc) => onRelocated(id, loc));
-    
+
     // swipe left = next page, swipe right = previous page
     let touchX = 0;
     let touchY = 0;
@@ -302,16 +302,14 @@ async function openBook(id) {
       touchY = e.changedTouches[0].screenY;
     });
     rendition.on("touchend", (e, contents) => {
-      // skip if text is selected, so selecting text to highlight doesn't turn the page
+      // skip while text is selected, so highlighting doesn't turn the page
       if (contents?.window.getSelection().toString()) return;
       const dx = e.changedTouches[0].screenX - touchX;
       const dy = e.changedTouches[0].screenY - touchY;
-      // must be mostly horizontal and long enough, so scrolling and taps are ignored
+      // must be long enough and mostly horizontal, so taps and scrolling are ignored
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      if (dx < 0) rendition.next();
-      else rendition.prev();
+      turnPage(dx < 0 ? 1 : -1);
     });
-
     const cachedLoc = await localforage.getItem("locations-" + id);
     if (cachedLoc) thisBook.locations.load(cachedLoc);
     await rendition.display(library[id].cfi || undefined);
@@ -326,6 +324,37 @@ async function openBook(id) {
     console.error("Error opening book:", err);
     alert("Failed to open book: " + err.message);
     showLibrary();
+  }
+}
+
+// slide the old page out, turn, then slide the new page in from the other side
+let turning = false;
+async function turnPage(dir) {
+  if (!rendition || turning) return; // ignore taps while a turn is running
+  turning = true;
+  const v = $("viewer");
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  try {
+    v.style.transition = "transform 110ms ease-in, opacity 110ms ease-in";
+    v.style.transform = `translateX(${-dir * 40}px)`;
+    v.style.opacity = "0";
+    await wait(110);
+
+    await (dir > 0 ? rendition.next() : rendition.prev());
+
+    v.style.transition = "none"; // jump to the entry side without animating
+    v.style.transform = `translateX(${dir * 40}px)`;
+    void v.offsetWidth; // force the browser to apply it before animating back
+    v.style.transition = "transform 160ms ease-out, opacity 160ms ease-out";
+    v.style.transform = "translateX(0)";
+    v.style.opacity = "1";
+    await wait(160);
+  } finally {
+    // always leave the page visible, even if the turn failed
+    v.style.transition = "";
+    v.style.transform = "";
+    v.style.opacity = "";
+    turning = false;
   }
 }
 
