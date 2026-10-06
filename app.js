@@ -44,13 +44,7 @@ async function migrate() {
 
 // startup
 document.addEventListener("DOMContentLoaded", async () => {
-  if ("serviceWorker" in navigator) {
-    try {
-      await navigator.serviceWorker.register("sw.js");
-    } catch (err) {
-      console.log("SW registration failed:", err);
-    }
-  }
+  registerServiceWorker();
   navigator.storage?.persist?.();
 
   settings = {
@@ -63,6 +57,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   await migrate();
   library = (await localforage.getItem("library")) || {};
   renderLibrary();
+
+  $("update-reload").addEventListener("click", async () => {
+    clearTimeout(saveTimer);
+    await saveLibrary(); // don't lose the reading position by reloading
+    location.reload();
+  });
+  $("update-dismiss").addEventListener("click", () =>
+    $("update-toast").classList.add("hidden"),
+  );
 
   $("add-book-btn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", handleFileSelect);
@@ -99,6 +102,34 @@ document.addEventListener("DOMContentLoaded", async () => {
       .forEach((cb) => (cb.checked = e.target.checked));
   });
 });
+
+// tell the user when a new version of the app has been deployed
+async function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.register("sw.js");
+
+    reg.addEventListener("updatefound", () => {
+      const worker = reg.installing;
+      worker?.addEventListener("statechange", () => {
+        // a controller only exists when this is an update, not the very first install
+        if (
+          worker.state === "installed" &&
+          navigator.serviceWorker.controller
+        ) {
+          $("update-toast").classList.remove("hidden");
+        }
+      });
+    });
+
+    // installed phone apps stay alive in the background, so check again when it comes back
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) reg.update().catch(() => {});
+    });
+  } catch (err) {
+    console.log("SW registration failed:", err);
+  }
+}
 
 // library
 function makeCard(id, data, big = false) {
