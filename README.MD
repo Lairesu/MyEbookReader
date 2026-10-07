@@ -1,4 +1,3 @@
-
 # Ebook Reader
 
 A personal EPUB reader that runs in the browser and works fully offline. It installs like a normal app on phones and computers, and keeps every book on your own device. No account, no server, no tracking.
@@ -14,6 +13,9 @@ Live app: [myebookreader.lairesu.workers.dev](https://myebookreader.lairesu.work
 - Continue reading card with progress, sorted by last opened
 - Select mode with mass delete
 - Responsive grid that fits phones, tablets and desktops
+- Filter by Reading, Unread or Finished; finished books get a gold glow and a badge
+- Shelves (tags) to group books, with a shelf filter; select mode adds many books at once
+- Drag EPUB files onto the library to add them
 
 **Reading**
 
@@ -21,6 +23,7 @@ Live app: [myebookreader.lairesu.workers.dev](https://myebookreader.lairesu.work
 - Saved position, progress bar, word count and estimated time left
 - Font size, font family, line spacing, and light, dark and sepia themes
 - Optional screen wake lock while reading
+- Dim and warm overlay sliders for night reading
 - Phone back button returns from the book to the library
 
 **Highlights and notes**
@@ -33,6 +36,8 @@ Live app: [myebookreader.lairesu.workers.dev](https://myebookreader.lairesu.work
 
 - Works with no connection after the first visit
 - Backup and restore the whole library, with or without the book files
+- Asks the browser for persistent storage, shows how much space is used and warns when the library is not protected
+- Reading dashboard (its own page) with bar graphs of time read per day, per hour of the day, and books finished per month
 - New version prompt when an update is deployed
 
 ## How it works
@@ -65,7 +70,7 @@ The project is plain static files. It can be hosted on GitHub Pages, Netlify or 
 2. Open Settings, then Pages, and choose the `main` branch and the root folder.
 3. Open the published link and install the app from the browser menu.
 
-After changing any cached file, bump `CACHE_NAME` in `sw.js` so installed copies update. Keep `sw.js` in the root folder, because a service worker can only control the folder it sits in. Use lowercase file names, because GitHub Pages is case sensitive.
+After changing any cached file, bump `CACHE_NAME` in `sw.js` so installed copies update. Keep `sw.js` in the root folder, because a service worker can only control the folder it sits in. Use lowercase file names, because GitHub Pages is case sensitive. The dashboard is a second page (`dashboard.html`); static hosts serve any number of pages, and each new page and script needs its own entry in `ASSETS`.
 
 ## Install
 
@@ -83,6 +88,7 @@ ebook-reader/
 ├── index.html          page layout and panels
 ├── manifest.json       install metadata
 ├── sw.js               service worker (kept in the root so it covers the whole app)
+├── dashboard.html      reading dashboard page
 ├── README.md
 ├── .gitignore
 ├── css/
@@ -92,7 +98,11 @@ ebook-reader/
 │   ├── highlights.js   highlights, colors and notes
 │   ├── toc.js          side drawer: chapters, highlights list, images
 │   ├── backup.js       export and import
-│   └── icons.js        shared SVG icon set
+│   ├── icons.js        shared SVG icon set
+│   ├── storage.js      persistent storage request and space used
+│   ├── library.js      status filter, shelves, drag and drop
+│   ├── stats.js        counts reading time for the dashboard
+│   └── dashboard.js    draws the dashboard page
 ├── icons/
 │   ├── icon-192.png    app icon
 │   └── icon-512.png    app icon
@@ -102,7 +112,7 @@ ebook-reader/
     └── localforage.min.js
 ```
 
-The scripts share global variables, so `index.html` loads them in a fixed order: `icons.js`, `app.js`, `highlights.js`, `backup.js`, `toc.js`. Keep that order when adding a file, and add its path to `ASSETS` in `sw.js`.
+The scripts share global variables, so `index.html` loads them in a fixed order: `icons.js`, `app.js`, `highlights.js`, `backup.js`, `toc.js`, `storage.js`, `library.js`, `stats.js`. Keep that order when adding a file, and add its path to `ASSETS` in `sw.js`.
 
 ## Limitations
 
