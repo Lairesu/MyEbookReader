@@ -81,6 +81,31 @@ function currentHref() {
   }
 }
 
+// toc links don't always match the book's file names exactly, so try a few spellings
+async function goToChapter(href) {
+  if (!rendition || !book) return;
+  closeDrawer();
+  const [file, frag] = (href || "").split("#");
+  const sec = book.spine.spineItems.find((s) => sameFile(s.href, file));
+  const tries = [href];
+  if (sec) tries.push(sec.href + (frag ? "#" + frag : ""), sec.href);
+  tries.push(file);
+  const errors = [];
+  for (const target of [...new Set(tries)]) {
+    try {
+      await rendition.display(target);
+      return;
+    } catch (err) {
+      errors.push(`${target}: ${err?.message || err}`);
+    }
+  }
+  console.log("Chapter link did not work:", errors);
+  // the details help to find the cause on a phone, where there is no console
+  alert(
+    `Could not open this chapter.\n\nLink: ${href}\nBook files start with: ${book.spine.spineItems[0]?.href}\nError: ${errors[0] || "none"}`,
+  );
+}
+
 function renderToc() {
   const list = dEl("toc-list");
   list.innerHTML = "";
@@ -107,10 +132,7 @@ function renderToc() {
         currentRow = row;
         row.classList.add("current");
       }
-      row.addEventListener("click", () => {
-        rendition?.display(item.href);
-        closeDrawer();
-      });
+      row.addEventListener("click", () => goToChapter(item.href));
       list.append(row);
       if (item.subitems?.length) walk(item.subitems, depth + 1);
     });

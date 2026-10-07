@@ -1422,7 +1422,7 @@ body.theme-sepia .dash-card {
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   transform: translateX(-50%);
-  z-index: 300;
+  z-index: 100; /* under the side drawer and panels, so it never blocks taps there */
   width: min(440px, calc(100vw - 16px));
   padding: 10px 6px 10px 14px;
   background: #1f2937;
