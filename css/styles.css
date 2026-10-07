@@ -1415,3 +1415,77 @@ body.theme-sepia .dash-card {
   background: #f4ecd8;
   color: #5b4636;
 }
+
+/* background preparation message (prepare.js): bottom of the screen, above the reader controls */
+#prep-status {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translateX(-50%);
+  z-index: 300;
+  width: min(440px, calc(100vw - 16px));
+  padding: 10px 6px 10px 14px;
+  background: #1f2937;
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  font-size: 14px;
+}
+#reader-view:not(.hidden) ~ #prep-status {
+  bottom: calc(
+    env(safe-area-inset-bottom, 0px) + 76px
+  ); /* clear of the page buttons */
+}
+.prep-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prep-title {
+  font-weight: 600;
+}
+.prep-close {
+  padding: 2px 6px;
+  color: #fff;
+}
+.prep-close .icon {
+  width: 18px;
+  height: 18px;
+}
+.prep-bar {
+  height: 6px;
+  margin: 8px 8px 6px 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.prep-fill {
+  height: 100%;
+  width: 0;
+  background: #3b82f6;
+  transition: width 0.3s;
+}
+.prep-detail {
+  margin-right: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #cbd5e1;
+  white-space: pre-line;
+}
+#prep-status.done {
+  background: #14532d;
+}
+#prep-status.done .prep-bar,
+#prep-status.notice .prep-bar,
+#prep-status.done .prep-detail,
+#prep-status.notice .prep-detail {
+  display: none;
+}
+#prep-status.hidden {
+  display: none;
+}
+/* inside a book keep it to one slim line so it covers as little of the page as possible */
+#reader-view:not(.hidden) ~ #prep-status .prep-detail {
+  display: none;
+}

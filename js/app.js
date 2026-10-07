@@ -75,6 +75,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadCovers();
   renderLibrary();
   backfillCovers(); // books without a cover get one in the background
+  queueUnpreparedBooks(); // prepare.js: page locations and word counts, in the background
   initStorage(); // storage.js: ask the browser to keep our data
 
   $("update-reload").addEventListener("click", async () => {
@@ -343,9 +344,10 @@ function handleFileSelect(e) {
 // used by the file picker and by drag and drop (library.js)
 async function addFiles(files) {
   if (!files.length) return;
-  let added = 0;
+  const newIds = [];
 
-  for (const file of files) {
+  for (const [i, file] of files.entries()) {
+    showPrepNotice(`Adding book ${i + 1} of ${files.length}\u2026`); // prepare.js
     try {
       const buf = await file.arrayBuffer();
       const temp = ePub(buf);
@@ -384,7 +386,7 @@ async function addFiles(files) {
         coverV: 2,
         noCover: !cover,
       };
-      added++;
+      newIds.push(id);
     } catch (err) {
       console.error("Failed to load:", file.name, err);
       alert(
@@ -394,16 +396,18 @@ async function addFiles(files) {
     }
   }
 
+  clearPrepNotice();
   await saveLibrary();
   renderLibrary();
-  if (added) {
+  if (newIds.length) {
     requestPersist(); // storage.js: more books means more to lose
-    alert(`${added} book(s) added.`);
+    queueBookPrep(newIds); // prepare.js: calculated in the background, several at once
   }
 }
 
 async function deleteBooks(ids) {
   for (const id of ids) {
+    cancelBookPrep(id); // prepare.js: stop preparing it if that was still running
     delete library[id];
     await localforage.removeItem("file-" + id);
     await localforage.removeItem("locations-" + id);
@@ -487,16 +491,18 @@ async function openBook(id) {
       turnPage(dx < 0 ? 1 : -1);
     });
     const cachedLoc = await localforage.getItem("locations-" + id);
-    if (cachedLoc) thisBook.locations.load(cachedLoc);
+    const locOk = hasValidLocations(cachedLoc); // prepare.js
+    if (locOk) thisBook.locations.load(cachedLoc);
     await rendition.display(library[id].cfi || undefined);
     setTimeout(() => rendition?.resize(), 150);
     initHighlights(id);
     setWakeLock(settings.keepAwake);
 
     library[id].lastOpened = Date.now();
+    // not prepared yet (for example added before this update): prepare.js does it now, first in line
+    if (locOk && library[id].words) library[id].prepV = PREP_VERSION;
+    else queueBookPrep([id], { urgent: true });
     saveLibrary();
-
-    prepareBookStats(id, thisBook); // locations + word count, in background
   } catch (err) {
     console.error("Error opening book:", err);
     alert("Failed to open book: " + err.message);
@@ -540,7 +546,8 @@ function onRelocated(id, loc) {
   library[id].cfi = loc.start.cfi;
   library[id].lastOpened = Date.now();
   const pct = getPercent(loc);
-  if (pct === null) progressText.textContent = "Calculating progress…";
+  if (pct === null)
+    progressText.textContent = prepProgressLabel(id); // prepare.js
   else {
     library[id].percent = pct;
     updateProgressUI(id, pct);
@@ -567,39 +574,6 @@ function updateProgressUI(id, pct) {
     text += ` · ${words.toLocaleString()} words · ${mins >= 60 ? Math.floor(mins / 60) + "h " + (mins % 60) + "m" : mins + "m"} left`;
   }
   progressText.textContent = text;
-}
-
-async function prepareBookStats(id, thisBook) {
-  try {
-    // Locations (cached so it's only slow once)
-    const saved = await localforage.getItem("locations-" + id);
-    if (saved) thisBook.locations.load(saved);
-    else {
-      await thisBook.locations.generate(1600);
-      if (book === thisBook)
-        await localforage.setItem("locations-" + id, thisBook.locations.save());
-    }
-    if (book !== thisBook) return;
-
-    // Word count (once per book)
-    if (!library[id].words) {
-      let total = 0;
-      for (const item of thisBook.spine.spineItems) {
-        if (book !== thisBook) return;
-        const doc = await item.load(thisBook.load.bind(thisBook));
-        const text = item.document?.body?.textContent ?? doc?.textContent ?? "";
-        total += (text.match(/\S+/g) || []).length;
-        item.unload();
-      }
-      library[id].words = total;
-      saveLibrary();
-    }
-
-    const loc = rendition?.currentLocation();
-    if (loc?.start) onRelocated(id, loc);
-  } catch (err) {
-    console.error("Stats failed:", err);
-  }
 }
 
 function destroyBook() {
@@ -828,3 +802,31 @@ async function backfillCovers() {
   }
   await saveLibrary();
 }
+
+// prepare.js tells the reader how the open book is doing
+document.addEventListener("book-prep-progress", (e) => {
+  const id = e.detail.id;
+  if (id === currentBookId && book && !book.locations?.length())
+    progressText.textContent = prepProgressLabel(id);
+});
+
+document.addEventListener("book-prepared", async (e) => {
+  const id = e.detail.id;
+  if (id !== currentBookId || !book) return;
+  try {
+    if (!book.locations?.length()) {
+      const saved = await localforage.getItem("locations-" + id);
+      if (id !== currentBookId || !book) return; // left the book meanwhile
+      if (hasValidLocations(saved)) book.locations.load(saved);
+    }
+    const loc = rendition?.currentLocation();
+    if (loc?.start) onRelocated(id, loc); // shows the real percentage, words and time left
+  } catch (err) {
+    console.error("Could not show the new progress:", err);
+  }
+});
+
+document.addEventListener("book-prep-failed", (e) => {
+  if (e.detail.id === currentBookId)
+    progressText.textContent = prepProgressLabel(e.detail.id);
+});

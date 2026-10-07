@@ -21,6 +21,7 @@ Live app: [myebookreader.lairesu.workers.dev](https://myebookreader.lairesu.work
 
 - Paginated reader with swipe, arrow keys and on-screen buttons
 - Saved position, progress bar, word count and estimated time left
+- Page locations and word counts are calculated in the background as soon as books are added, several at once, with a message showing how many are done and the time left
 - Font size, font family, line spacing, and light, dark and sepia themes
 - Optional screen wake lock while reading
 - Dim and warm overlay sliders for night reading
@@ -102,6 +103,7 @@ ebook-reader/
 │   ├── storage.js      persistent storage request and space used
 │   ├── library.js      status filter, shelves, drag and drop
 │   ├── stats.js        counts reading time for the dashboard
+│   ├── prepare.js      prepares books in the background (page locations, word counts)
 │   └── dashboard.js    draws the dashboard page
 ├── icons/
 │   ├── icon-192.png    app icon
@@ -112,7 +114,7 @@ ebook-reader/
     └── localforage.min.js
 ```
 
-The scripts share global variables, so `index.html` loads them in a fixed order: `icons.js`, `app.js`, `highlights.js`, `backup.js`, `toc.js`, `storage.js`, `library.js`, `stats.js`. Keep that order when adding a file, and add its path to `ASSETS` in `sw.js`.
+The scripts share global variables, so `index.html` loads them in a fixed order: `icons.js`, `app.js`, `highlights.js`, `backup.js`, `toc.js`, `storage.js`, `library.js`, `stats.js`, `prepare.js`. Keep that order when adding a file, and add its path to `ASSETS` in `sw.js`.
 
 ## Limitations
 
