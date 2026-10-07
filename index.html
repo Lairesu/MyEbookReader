@@ -23,7 +23,6 @@
     <script src="libs/localforage.min.js"></script>
   </head>
   <body>
-    <!-- LIBRARY VIEW  -->
     <!-- Library View -->
     <div id="library-view">
       <header class="header">
@@ -192,6 +191,34 @@
             <button class="theme-btn" data-theme="dark">Dark</button>
             <button class="theme-btn" data-theme="sepia">Sepia</button>
           </div>
+        </div>
+
+        <div class="setting-item">
+          <label for="font-family-select">Font</label>
+          <select id="font-family-select">
+            <option value="original">Book's own font</option>
+            <option value="serif">Serif</option>
+            <option value="sans">Sans-serif</option>
+            <option value="mono">Monospace</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label for="line-height-select">Line spacing</label>
+          <select id="line-height-select">
+            <option value="0">Book's own</option>
+            <option value="1.3">Compact</option>
+            <option value="1.5">Normal</option>
+            <option value="1.8">Relaxed</option>
+            <option value="2.1">Wide</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label
+            ><input type="checkbox" id="keep-awake" /> Keep screen awake while
+            reading</label
+          >
         </div>
 
         <button id="close-settings" class="btn full-width">Close</button>

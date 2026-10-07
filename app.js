@@ -3,7 +3,14 @@ let book = null;
 let rendition = null;
 let currentBookId = null;
 let library = {}; // id -> {title, author, addedAt, lastOpened, cfi, percent, words}
-let settings = { fontSize: 100, theme: "light" };
+let settings = {
+  fontSize: 100,
+  theme: "light",
+  fontFamily: "original",
+  lineHeight: 0,
+  keepAwake: true,
+};
+let coverUrls = {}; // id -> blob url of the small cover image
 let saveTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -53,10 +60,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   };
   applyBodyTheme(settings.theme);
   fontSizeValue.textContent = settings.fontSize + "%";
+  $("font-family-select").value = settings.fontFamily;
+  $("line-height-select").value = String(settings.lineHeight);
+  $("keep-awake").checked = settings.keepAwake;
 
   await migrate();
   library = (await localforage.getItem("library")) || {};
+  await loadCovers();
   renderLibrary();
+  backfillCovers(); // books without a cover get one in the background
 
   $("update-reload").addEventListener("click", async () => {
     clearTimeout(saveTimer);
@@ -69,7 +81,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   $("add-book-btn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", handleFileSelect);
-  $("back-btn").addEventListener("click", showLibrary);
+  $("back-btn").addEventListener("click", leaveReader);
   $("menu-btn").addEventListener("click", () =>
     settingsPanel.classList.remove("hidden"),
   );
@@ -90,6 +102,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (readerView.classList.contains("hidden")) return;
     if (e.key === "ArrowLeft") turnPage(-1);
     if (e.key === "ArrowRight") turnPage(1);
+  });
+
+  $("font-family-select").addEventListener("change", (e) => {
+    settings.fontFamily = e.target.value;
+    saveSettings();
+    updateReadingStyle();
+  });
+  $("line-height-select").addEventListener("change", (e) => {
+    settings.lineHeight = parseFloat(e.target.value);
+    saveSettings();
+    updateReadingStyle();
+  });
+  $("keep-awake").addEventListener("change", (e) => {
+    settings.keepAwake = e.target.checked;
+    saveSettings();
+    setWakeLock(settings.keepAwake && !!book);
+  });
+
+  // phone back button: close what is open on top, then leave the book
+  window.addEventListener("popstate", () => {
+    if (readerView.classList.contains("hidden")) return; // already in the library
+    if (closeTopOverlay()) {
+      history.pushState({ reader: true }, ""); // stay in the book
+      return;
+    }
+    showLibrary();
+  });
+  document.addEventListener("visibilitychange", () => {
+    // the browser drops the wake lock when the app is hidden, so ask again on return
+    if (!document.hidden && book && settings.keepAwake) setWakeLock(true);
   });
 
   $("select-mode-btn").addEventListener("click", () =>
@@ -132,30 +174,61 @@ async function registerServiceWorker() {
 }
 
 // library
+function makeCoverEl(id, data) {
+  const hasCover = !!coverUrls[id];
+  const cover = document.createElement(hasCover ? "img" : "div");
+  cover.className = "cover" + (hasCover ? "" : " cover-empty");
+  if (hasCover) {
+    cover.src = coverUrls[id];
+    cover.alt = "";
+  } else {
+    cover.textContent = (data.title || "?").trim().charAt(0).toUpperCase();
+  }
+  return cover;
+}
+
+// swap the placeholder for the real cover once it has been found
+function setCardCover(id) {
+  document.querySelectorAll(`.book-card[data-id="${id}"]`).forEach((card) => {
+    card.querySelector(".cover")?.replaceWith(makeCoverEl(id, library[id]));
+  });
+}
+
 function makeCard(id, data, big = false) {
   const card = document.createElement("div");
   card.className = "book-card" + (big ? " continue-card" : "");
+  card.dataset.id = id;
+  const pct = Math.round((data.percent || 0) * 100);
+
+  // the cover fills the card; progress, checkbox and delete button sit on top of it
+  const wrap = document.createElement("div");
+  wrap.className = "cover-wrap";
+  wrap.append(makeCoverEl(id, data));
+  card.append(wrap);
 
   const info = document.createElement("div");
   info.className = "book-info";
+  info.title = `${data.title || "Untitled"} - ${data.author || "Unknown Author"}`;
   const h3 = document.createElement("h3");
   h3.textContent = data.title || "Untitled";
-  const p = document.createElement("p");
-  p.textContent = data.author || "Unknown Author";
-  info.append(h3, p);
-
-  const meta = document.createElement("p");
-  meta.className = "book-meta";
-  const pct = Math.round((data.percent || 0) * 100);
-  meta.textContent = pct > 0 ? pct + "% read" : "Not started";
-  info.append(meta);
+  info.append(h3);
 
   const bar = document.createElement("div");
   bar.className = "card-progress";
   const fill = document.createElement("div");
   fill.style.width = pct + "%";
   bar.append(fill);
-  info.append(bar);
+
+  if (big) {
+    const p = document.createElement("p");
+    p.textContent = data.author || "Unknown Author";
+    const meta = document.createElement("p");
+    meta.className = "book-meta";
+    meta.textContent = pct > 0 ? pct + "% read" : "Not started";
+    info.append(p, meta, bar);
+  } else if (pct > 0) {
+    wrap.append(bar);
+  }
   card.append(info);
 
   if (!big) {
@@ -164,7 +237,7 @@ function makeCard(id, data, big = false) {
     cb.className = "book-checkbox";
     cb.dataset.id = id;
     cb.addEventListener("click", (e) => e.stopPropagation());
-    card.append(cb);
+    wrap.append(cb);
 
     const del = document.createElement("button");
     del.className = "delete-btn";
@@ -173,7 +246,7 @@ function makeCard(id, data, big = false) {
       e.stopPropagation();
       if (confirm(`Delete "${data.title}"?`)) await deleteBooks([id]);
     });
-    card.append(del);
+    wrap.append(del);
   }
 
   card.addEventListener("click", () => {
@@ -225,6 +298,11 @@ async function handleFileSelect(e) {
       const temp = ePub(buf);
       await temp.ready;
       const meta = await temp.loaded.metadata;
+      // never let a slow or broken cover stop the book from being added
+      const cover = await Promise.race([
+        makeCoverThumb(temp, buf), // must happen before destroy
+        new Promise((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
       temp.destroy();
 
       const title = (meta.title || file.name.replace(/\.epub$/i, "")).trim();
@@ -239,6 +317,10 @@ async function handleFileSelect(e) {
       const id =
         "book_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
       await localforage.setItem("file-" + id, buf);
+      if (cover) {
+        await localforage.setItem("cover-" + id, cover);
+        coverUrls[id] = URL.createObjectURL(cover);
+      }
       library[id] = {
         title,
         author,
@@ -246,6 +328,8 @@ async function handleFileSelect(e) {
         lastOpened: 0,
         cfi: null,
         percent: 0,
+        coverV: 2,
+        noCover: !cover,
       };
       added++;
     } catch (err) {
@@ -269,6 +353,9 @@ async function deleteBooks(ids) {
     await localforage.removeItem("file-" + id);
     await localforage.removeItem("locations-" + id);
     await localforage.removeItem("notes-" + id);
+    await localforage.removeItem("cover-" + id);
+    if (coverUrls[id]) URL.revokeObjectURL(coverUrls[id]);
+    delete coverUrls[id];
   }
   await saveLibrary();
   renderLibrary();
@@ -305,6 +392,7 @@ async function openBook(id) {
     currentBookId = id;
     libraryView.classList.add("hidden");
     readerView.classList.remove("hidden");
+    history.pushState({ reader: true }, ""); // so the phone back button returns to the library
     $("book-title").textContent = library[id].title || "Untitled";
     $("viewer").innerHTML = "";
     progressFill.style.width = (library[id].percent || 0) * 100 + "%";
@@ -322,6 +410,7 @@ async function openBook(id) {
     });
     applyReaderTheme(settings.theme);
     rendition.themes.fontSize(settings.fontSize + "%");
+    rendition.hooks.content.register(applyReadingStyle); // font and spacing for every page
 
     rendition.on("relocated", (loc) => onRelocated(id, loc));
 
@@ -346,6 +435,7 @@ async function openBook(id) {
     await rendition.display(library[id].cfi || undefined);
     setTimeout(() => rendition?.resize(), 150);
     initHighlights(id);
+    setWakeLock(settings.keepAwake);
 
     library[id].lastOpened = Date.now();
     saveLibrary();
@@ -354,7 +444,7 @@ async function openBook(id) {
   } catch (err) {
     console.error("Error opening book:", err);
     alert("Failed to open book: " + err.message);
-    showLibrary();
+    leaveReader();
   }
 }
 
@@ -455,6 +545,7 @@ async function prepareBookStats(id, thisBook) {
 
 function destroyBook() {
   closeHighlights();
+  setWakeLock(false);
   if (book) {
     try {
       book.destroy();
@@ -503,4 +594,167 @@ function setTheme(theme) {
   applyBodyTheme(theme);
   applyReaderTheme(theme);
   saveSettings();
+}
+
+// back button: use the browser history so the phone's back gesture works too
+function leaveReader() {
+  if (history.state?.reader)
+    history.back(); // triggers popstate, which shows the library
+  else showLibrary();
+}
+
+function closeTopOverlay() {
+  if (!$("lightbox").classList.contains("hidden")) {
+    $("lightbox").classList.add("hidden");
+    return true;
+  }
+  if ($("drawer").classList.contains("open")) {
+    closeDrawer();
+    return true;
+  }
+  if (!settingsPanel.classList.contains("hidden")) {
+    settingsPanel.classList.add("hidden");
+    return true;
+  }
+  if (!$("hl-bar").classList.contains("hidden")) {
+    closeBar();
+    return true;
+  }
+  return false;
+}
+
+// keep the screen awake while a book is open
+let wakeLock = null;
+async function setWakeLock(on) {
+  try {
+    if (on && "wakeLock" in navigator) {
+      if (wakeLock) return;
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => (wakeLock = null));
+    } else if (wakeLock) {
+      await wakeLock.release();
+      wakeLock = null;
+    }
+  } catch (err) {
+    console.log("Wake lock not available:", err);
+  }
+}
+
+// font and line spacing are injected into every page of the book
+const FONT_STACKS = {
+  original: "",
+  serif: 'Georgia, "Times New Roman", serif',
+  sans: '"Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+  mono: '"Courier New", Courier, monospace',
+};
+
+function readingCss() {
+  let css = "";
+  const font = FONT_STACKS[settings.fontFamily];
+  if (font)
+    css += `html body, html body * { font-family: ${font} !important; }\n`;
+  if (settings.lineHeight)
+    css += `html body, html body * { line-height: ${settings.lineHeight} !important; }\n`;
+  return css; // empty = leave the book's own look alone
+}
+
+function applyReadingStyle(contents) {
+  const doc = contents.document;
+  let el = doc.getElementById("reading-style");
+  if (!el) {
+    el = doc.createElement("style");
+    el.id = "reading-style";
+    doc.head.appendChild(el);
+  }
+  el.textContent = readingCss();
+}
+
+async function updateReadingStyle() {
+  if (!rendition) return;
+  const cfi = rendition.currentLocation()?.start?.cfi;
+  rendition.getContents().forEach(applyReadingStyle);
+  rendition.resize();
+  if (cfi) await rendition.display(cfi); // spacing changes the pages, so return to where we were
+}
+
+// covers: a small jpeg per book, so the library never has to open the books
+async function loadCovers() {
+  for (const id of Object.keys(library)) {
+    if (coverUrls[id]) continue;
+    const blob = await localforage.getItem("cover-" + id);
+    if (blob) coverUrls[id] = URL.createObjectURL(blob);
+  }
+}
+
+// bk = epub.js book, buf = the epub file (used when the book doesn't declare its cover)
+async function makeCoverThumb(bk, buf) {
+  let url = null;
+  try {
+    url = await bk.coverUrl().catch(() => null);
+    if (!url && buf) url = await coverFromZip(buf);
+    if (!url) return null;
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    if (!img.naturalWidth) return null;
+    const w = 360; // sharp enough for phones with high-density screens
+    const h = Math.round((img.naturalHeight * w) / img.naturalWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+    return await new Promise((res) => canvas.toBlob(res, "image/jpeg", 0.85));
+  } catch (err) {
+    console.log("No cover for this book:", err);
+    return null;
+  } finally {
+    if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+  }
+}
+
+// many epubs don't mark their cover, but still contain an image named like "cover.jpg"
+async function coverFromZip(buf) {
+  const zip = await JSZip.loadAsync(buf);
+  const hits = zip.file(/cover[^/]*\.(jpe?g|png|webp|gif)$/i);
+  if (!hits.length) return null;
+  const entry = hits.sort((x, y) => x.name.length - y.name.length)[0];
+  const ext = entry.name.split(".").pop().toLowerCase();
+  const type = ext === "jpg" ? "image/jpeg" : "image/" + ext;
+  return URL.createObjectURL(
+    new Blob([await entry.async("arraybuffer")], { type }),
+  );
+}
+
+async function ensureCover(id, bk, buf) {
+  const cover = await makeCoverThumb(bk, buf);
+  if (cover) {
+    await localforage.setItem("cover-" + id, cover);
+    if (coverUrls[id]) URL.revokeObjectURL(coverUrls[id]);
+    coverUrls[id] = URL.createObjectURL(cover);
+  }
+  library[id].coverV = 2; // 2 = made with the current size and the zip fallback
+  library[id].noCover = !cover;
+}
+
+// one book at a time, so a big library doesn't freeze the app
+async function backfillCovers() {
+  for (const id of Object.keys(library)) {
+    if (!library[id] || library[id].coverV === 2) continue;
+    let bk = null;
+    try {
+      const buf = await localforage.getItem("file-" + id);
+      if (!buf) continue;
+      bk = ePub(buf);
+      await bk.ready;
+      await ensureCover(id, bk, buf);
+      setCardCover(id);
+    } catch (err) {
+      console.log("Cover backfill failed for", id, err);
+    } finally {
+      try {
+        bk?.destroy();
+      } catch (e) {}
+    }
+  }
+  await saveLibrary();
 }

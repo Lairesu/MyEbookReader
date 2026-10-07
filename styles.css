@@ -853,6 +853,168 @@ body.theme-dark #drawer-footer {
   font-size: 14px;
   max-width: calc(100vw - 16px);
 }
-#update-toast .btn { padding: 6px 12px; font-size: 14px; }
-#update-toast .btn-icon { padding: 4px; color: #fff; }
-#update-toast .icon { width: 18px; height: 18px; }
+#update-toast .btn {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+#update-toast .btn-icon {
+  padding: 4px;
+  color: #fff;
+}
+#update-toast .icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* library cards: the cover takes 90% of the card, the title the bottom 10% */
+.book-list {
+  /* as many columns as fit (tiles at least 160px wide), then the tiles stretch to use the full width */
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  scrollbar-width: none; /* hide the scrollbar, scrolling still works */
+  -ms-overflow-style: none;
+  grid-auto-rows: max-content; /* rows keep their size, however many books there are */
+  align-content: start;
+  align-items: start;
+  gap: 18px; /* space so a card that pops up never touches its neighbours */
+  padding: 10px 10px 24px; /* room for the pop-up so it isn't clipped at the edges */
+}
+.book-list .book-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 9fr) minmax(0, 1fr);
+  aspect-ratio: 3 / 5;
+  padding: 0;
+  overflow: hidden;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.book-list .book-card:hover {
+  transform: none;
+}
+@media (hover: hover) {
+  .book-list .book-card:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.35);
+    z-index: 2;
+  }
+}
+.book-list .book-card:active {
+  transform: scale(0.97);
+}
+
+.cover-wrap {
+  position: relative;
+  min-height: 0;
+}
+.cover {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  margin: 0;
+  border-radius: 0;
+  background: #e5e7eb;
+}
+.cover-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+.book-list .book-card .book-info {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0 8px;
+}
+.book-list .book-card .book-info h3 {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cover-wrap .card-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  margin: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.book-list::-webkit-scrollbar {
+  display: none;
+}
+
+/* phones: smaller tiles, so a 360px screen gets 3 columns (use 140px for 2 bigger columns) */
+@media (max-width: 600px) {
+  .book-list {
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 12px;
+    padding: 8px 8px 24px;
+  }
+  .book-list .book-card .book-info {
+    padding: 0 6px;
+  }
+  .book-list .book-card .book-info h3 {
+    font-size: 11px;
+  }
+}
+
+/* continue reading card (wide, cover on the left) */
+.continue-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+}
+.continue-card .cover-wrap {
+  width: 84px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.continue-card .cover {
+  height: auto;
+  aspect-ratio: 2 / 3;
+}
+.continue-card .book-info {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+}
+.continue-card .book-info h3 {
+  font-size: 15px;
+}
+body.theme-dark .cover {
+  background: #2a2a2a;
+}
+
+/* reading settings */
+.settings-content select {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: inherit;
+  color: inherit;
+  font-size: 15px;
+}
+body.theme-dark .settings-content select {
+  background: #2a2a2a;
+  border-color: #444;
+}
+.setting-item input[type="checkbox"] {
+  margin-right: 8px;
+}

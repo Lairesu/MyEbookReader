@@ -159,6 +159,7 @@ async function importBackup(file) {
 
     await saveLibrary();
     renderLibrary();
+    if (typeof backfillCovers === "function") backfillCovers(); // restored books get covers
     let msg = `Done: ${added} added, ${updated} updated`;
     if (skipped) msg += `, ${skipped} skipped (book file not in backup)`;
     setBackupStatus(msg + ".");
