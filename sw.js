@@ -1,14 +1,14 @@
-const CACHE_NAME = "ebook-reader-v13"; // bump when ASSETS change
+const CACHE_NAME = "ebook-reader-v14"; // bump when ASSETS change
 
 const ASSETS = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./icons.js",
-  "./app.js",
-  "./highlights.js",
-  "./backup.js",
-  "./toc.js",
+  "./css/styles.css",
+  "./js/icons.js",
+  "./js/app.js",
+  "./js/highlights.js",
+  "./js/backup.js",
+  "./js/toc.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png",
