@@ -874,15 +874,14 @@ body.theme-dark #drawer-footer {
   -ms-overflow-style: none;
   grid-auto-rows: max-content; /* rows keep their size, however many books there are */
   align-content: start;
-  align-items: start;
+  align-items: stretch; /* every card in a row grows to the tallest title */
   gap: 18px; /* space so a card that pops up never touches its neighbours */
   padding: 10px 10px 24px; /* room for the pop-up so it isn't clipped at the edges */
 }
 .book-list .book-card {
   position: relative;
   display: grid;
-  grid-template-rows: minmax(0, 9fr) minmax(0, 1fr);
-  aspect-ratio: 3 / 5;
+  grid-template-rows: auto 1fr; /* cover on top, title takes whatever height it needs */
   padding: 0;
   overflow: hidden;
   transition:
@@ -906,12 +905,13 @@ body.theme-dark #drawer-footer {
 .cover-wrap {
   position: relative;
   min-height: 0;
+  aspect-ratio: 2 / 3;
 }
 .cover {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain; /* show the whole cover, never crop it */
   margin: 0;
   border-radius: 0;
   background: #e5e7eb;
@@ -926,9 +926,9 @@ body.theme-dark #drawer-footer {
 }
 .book-list .book-card .book-info {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   min-height: 0;
-  padding: 0 8px;
+  padding: 7px 8px 9px;
 }
 .book-list .book-card .book-info h3 {
   display: block;
@@ -936,10 +936,9 @@ body.theme-dark #drawer-footer {
   min-width: 0;
   margin: 0;
   font-size: 12px;
-  line-height: 1.2;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
+  white-space: normal; /* wrap onto more lines */
+  overflow-wrap: anywhere; /* very long words wrap too */
 }
 .cover-wrap .card-progress {
   position: absolute;
@@ -964,7 +963,7 @@ body.theme-dark #drawer-footer {
     padding: 8px 8px 24px;
   }
   .book-list .book-card .book-info {
-    padding: 0 6px;
+    padding: 6px 6px 8px;
   }
   .book-list .book-card .book-info h3 {
     font-size: 11px;

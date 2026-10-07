@@ -1,4 +1,4 @@
-const CACHE_NAME = "ebook-reader-v14"; // bump when ASSETS change
+const CACHE_NAME = "ebook-reader-v15"; // bump when ASSETS change
 
 const ASSETS = [
   "./",
