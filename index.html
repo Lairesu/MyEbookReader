@@ -15,7 +15,7 @@
     <link rel="manifest" href="manifest.json" />
 
     <!-- Styles -->
-    <link rel="stylesheet" href="Css/styles.css" />
+    <link rel="stylesheet" href="css/styles.css" />
 
     <!-- Libraries -->
     <script src="libs/jszip.min.js"></script>
@@ -29,9 +29,17 @@
       <header class="header">
         <h1>My Books</h1>
         <div class="header-buttons">
+          <a href="dashboard.html" class="btn btn-secondary">Dashboard</a>
           <button id="backup-btn" class="btn btn-secondary">Backup</button>
           <button id="select-mode-btn" class="btn btn-secondary">Select</button>
           <button id="add-book-btn" class="btn">+ Add Books</button>
+          <button
+            id="shelf-selected-btn"
+            class="btn btn-secondary"
+            style="display: none"
+          >
+            Add to shelf
+          </button>
           <button
             id="delete-selected-btn"
             class="btn btn-danger"
@@ -48,13 +56,44 @@
 
       <input type="file" id="file-input" accept=".epub" multiple hidden />
 
+      <div id="persist-banner" class="persist-banner hidden">
+        <span id="persist-text"></span>
+        <button class="btn persist-action">Protect library</button>
+        <button id="open-backup" class="btn btn-secondary">Back up</button>
+        <button
+          id="persist-dismiss"
+          class="btn-icon"
+          data-icon="close"
+          aria-label="Dismiss"
+        ></button>
+      </div>
+
       <div id="continue-section"></div>
+
+      <div id="filter-bar" class="filter-bar" style="display: none">
+        <div class="chips" id="status-chips">
+          <button class="chip active" data-status="all" data-label="All">
+            All
+          </button>
+          <button class="chip" data-status="reading" data-label="Reading">
+            Reading
+          </button>
+          <button class="chip" data-status="unread" data-label="Unread">
+            Unread
+          </button>
+          <button class="chip" data-status="finished" data-label="Finished">
+            Finished
+          </button>
+        </div>
+        <select id="shelf-filter" aria-label="Shelf"></select>
+      </div>
+
       <div id="book-list" class="book-list"></div>
 
       <p id="empty-message" class="empty-message" style="display: none">
         No books yet.<br />
-        Tap "+ Add Books" to load EPUB files,<br />or open Backup to restore a
-        saved library.
+        Tap "+ Add Books" or drop EPUB files here,<br />or open Backup to
+        restore a saved library.
       </p>
     </div>
 
@@ -109,6 +148,15 @@
       </div>
     </div>
 
+    <!--  Dim and warm overlay: shown only while a book is open (see styles.css)  -->
+    <div id="reader-overlay" aria-hidden="true">
+      <div id="warm-layer"></div>
+      <div id="dim-layer"></div>
+    </div>
+
+    <!--  Shown while EPUB files are dragged over the library  -->
+    <div id="drop-overlay" class="hidden">Drop EPUB files to add them</div>
+
     <!--  SIDE DRAWER: chapters, bookmarks (highlights), images  -->
     <div id="drawer-backdrop"></div>
     <aside id="drawer" aria-label="Book menu">
@@ -156,6 +204,17 @@
           Your books live only in this browser. Export a file to keep a copy or
           move your library to another device.
         </p>
+        <div class="storage-box">
+          <div class="storage-row">
+            <strong>Storage protection</strong>
+            <span id="storage-badge" class="storage-badge warn">Checking…</span>
+          </div>
+          <div id="storage-bar"><div id="storage-fill"></div></div>
+          <p id="storage-text" class="backup-help"></p>
+          <button class="btn full-width persist-action">
+            Protect my library
+          </button>
+        </div>
         <button id="export-full" class="btn full-width">
           Export everything (books + highlights)
         </button>
@@ -216,6 +275,34 @@
         </div>
 
         <div class="setting-item">
+          <label for="dim-range"
+            >Dim screen <span id="dim-value">0%</span></label
+          >
+          <input
+            type="range"
+            id="dim-range"
+            min="0"
+            max="70"
+            step="5"
+            value="0"
+          />
+        </div>
+
+        <div class="setting-item">
+          <label for="warm-range"
+            >Warm tint (night reading) <span id="warm-value">0%</span></label
+          >
+          <input
+            type="range"
+            id="warm-range"
+            min="0"
+            max="80"
+            step="5"
+            value="0"
+          />
+        </div>
+
+        <div class="setting-item">
           <label
             ><input type="checkbox" id="keep-awake" /> Keep screen awake while
             reading</label
@@ -271,5 +358,8 @@
     <script src="js/highlights.js"></script>
     <script src="js/backup.js"></script>
     <script src="js/toc.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/library.js"></script>
+    <script src="js/stats.js"></script>
   </body>
 </html>

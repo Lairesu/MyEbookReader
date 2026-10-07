@@ -63,6 +63,7 @@ async function exportBackup(includeBooks) {
         app: "ebook-reader",
         version: 1,
         exportedAt: new Date().toISOString(),
+        readLog: (await localforage.getItem("readlog")) || {}, // time read per day and hour
         books,
       }),
     );
@@ -111,6 +112,13 @@ async function mergeInto(id, b) {
     library[id].lastOpened = b.lastOpened;
   }
   if (!library[id].words && b.words) library[id].words = b.words;
+
+  // shelves are added together, and the earlier finish date wins
+  library[id].shelves = [
+    ...new Set([...(library[id].shelves || []), ...(b.shelves || [])]),
+  ];
+  if (b.finishedAt && !library[id].finishedAt)
+    library[id].finishedAt = b.finishedAt;
 }
 
 async function importBackup(file) {
@@ -150,6 +158,8 @@ async function importBackup(file) {
           cfi: b.cfi || null,
           percent: b.percent || 0,
           words: b.words,
+          shelves: b.shelves || [],
+          finishedAt: b.finishedAt || null,
         };
         added++;
       } else {
@@ -157,6 +167,8 @@ async function importBackup(file) {
       }
     }
 
+    if (data.readLog && typeof mergeReadLog === "function")
+      await mergeReadLog(data.readLog); // stats.js
     await saveLibrary();
     renderLibrary();
     if (typeof backfillCovers === "function") backfillCovers(); // restored books get covers

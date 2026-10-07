@@ -35,6 +35,9 @@ const ICONS = {
   sort: svg(
     '<line x1="8" y1="4" x2="8" y2="20"/><polyline points="4 16 8 20 12 16"/><line x1="16" y1="20" x2="16" y2="4"/><polyline points="12 8 16 4 20 8"/>',
   ),
+  tag: svg(
+    '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><line x1="7" y1="7" x2="7.01" y2="7"/>',
+  ),
   trash: svg(
     '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
   ),

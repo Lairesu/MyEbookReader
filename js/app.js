@@ -9,9 +9,14 @@ let settings = {
   fontFamily: "original",
   lineHeight: 0,
   keepAwake: true,
+  dim: 0, // reading overlay: darkness in % (0-70)
+  warm: 0, // reading overlay: warm tint in % (0-80)
 };
 let coverUrls = {}; // id -> blob url of the small cover image
 let saveTimer = null;
+
+const FINISHED_AT = 0.98; // a book counts as finished from this progress on
+const isFinished = (b) => (b.percent || 0) >= FINISHED_AT;
 
 const $ = (id) => document.getElementById(id);
 const libraryView = $("library-view");
@@ -52,7 +57,6 @@ async function migrate() {
 // startup
 document.addEventListener("DOMContentLoaded", async () => {
   registerServiceWorker();
-  navigator.storage?.persist?.();
 
   settings = {
     ...settings,
@@ -63,12 +67,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("font-family-select").value = settings.fontFamily;
   $("line-height-select").value = String(settings.lineHeight);
   $("keep-awake").checked = settings.keepAwake;
+  applyOverlay();
 
   await migrate();
   library = (await localforage.getItem("library")) || {};
+  backfillFinished(); // stats.js: finish dates for books that were already finished
   await loadCovers();
   renderLibrary();
   backfillCovers(); // books without a cover get one in the background
+  initStorage(); // storage.js: ask the browser to keep our data
 
   $("update-reload").addEventListener("click", async () => {
     clearTimeout(saveTimer);
@@ -119,6 +126,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     saveSettings();
     setWakeLock(settings.keepAwake && !!book);
   });
+
+  // dim and warm overlay: update live while sliding, save when let go
+  $("dim-range").addEventListener("input", (e) => {
+    settings.dim = Number(e.target.value);
+    applyOverlay();
+  });
+  $("warm-range").addEventListener("input", (e) => {
+    settings.warm = Number(e.target.value);
+    applyOverlay();
+  });
+  ["dim-range", "warm-range"].forEach((id) =>
+    $(id).addEventListener("change", saveSettings),
+  );
 
   // phone back button: close what is open on top, then leave the book
   window.addEventListener("popstate", () => {
@@ -198,12 +218,19 @@ function makeCard(id, data, big = false) {
   const card = document.createElement("div");
   card.className = "book-card" + (big ? " continue-card" : "");
   card.dataset.id = id;
+  if (!big && isFinished(data)) card.classList.add("finished");
   const pct = Math.round((data.percent || 0) * 100);
 
   // the cover fills the card; progress, checkbox and delete button sit on top of it
   const wrap = document.createElement("div");
   wrap.className = "cover-wrap";
   wrap.append(makeCoverEl(id, data));
+  if (!big && isFinished(data)) {
+    const badge = document.createElement("span");
+    badge.className = "finished-badge";
+    badge.textContent = "\u2713 Finished";
+    wrap.append(badge);
+  }
   card.append(wrap);
 
   const info = document.createElement("div");
@@ -247,6 +274,16 @@ function makeCard(id, data, big = false) {
       if (confirm(`Delete "${data.title}"?`)) await deleteBooks([id]);
     });
     wrap.append(del);
+
+    const shelf = document.createElement("button");
+    shelf.className = "shelf-btn";
+    shelf.innerHTML = ICONS.tag;
+    shelf.title = "Shelves";
+    shelf.addEventListener("click", (e) => {
+      e.stopPropagation();
+      editShelves([id], "set"); // library.js
+    });
+    wrap.append(shelf);
   }
 
   card.addEventListener("click", () => {
@@ -265,7 +302,11 @@ function renderLibrary() {
   continueSection.innerHTML = "";
   const ids = Object.keys(library);
   emptyMessage.style.display = ids.length ? "none" : "block";
-  if (!ids.length) return;
+  $("filter-bar").style.display = ids.length ? "" : "none";
+  if (!ids.length) {
+    afterLibraryRender(); // library.js
+    return;
+  }
 
   // Continue reading = most recently opened book that has progress
   const recent = ids
@@ -278,17 +319,29 @@ function renderLibrary() {
     continueSection.append(label, makeCard(recent, library[recent], true));
   }
 
-  ids
-    .sort(
-      (a, b) =>
-        (library[b].lastOpened || library[b].addedAt) -
-        (library[a].lastOpened || library[a].addedAt),
-    )
-    .forEach((id) => bookList.append(makeCard(id, library[id])));
+  const shown = applyFilters(ids).sort(
+    (a, b) =>
+      (library[b].lastOpened || library[b].addedAt) -
+      (library[a].lastOpened || library[a].addedAt),
+  );
+  shown.forEach((id) => bookList.append(makeCard(id, library[id])));
+  if (!shown.length) {
+    const p = document.createElement("p");
+    p.className = "filter-empty";
+    p.textContent = "No books match this filter.";
+    bookList.append(p);
+  }
+  afterLibraryRender(); // library.js: chip counts, shelf list
 }
 
-async function handleFileSelect(e) {
+function handleFileSelect(e) {
   const files = Array.from(e.target.files);
+  fileInput.value = ""; // allows picking the same file again
+  return addFiles(files);
+}
+
+// used by the file picker and by drag and drop (library.js)
+async function addFiles(files) {
   if (!files.length) return;
   let added = 0;
 
@@ -343,8 +396,10 @@ async function handleFileSelect(e) {
 
   await saveLibrary();
   renderLibrary();
-  fileInput.value = "";
-  if (added) alert(`${added} book(s) added.`);
+  if (added) {
+    requestPersist(); // storage.js: more books means more to lose
+    alert(`${added} book(s) added.`);
+  }
 }
 
 async function deleteBooks(ids) {
@@ -365,6 +420,7 @@ function toggleSelectMode(enable) {
   bookList.classList.toggle("select-mode", enable);
   $("select-controls").style.display = enable ? "block" : "none";
   $("delete-selected-btn").style.display = enable ? "inline-block" : "none";
+  $("shelf-selected-btn").style.display = enable ? "inline-block" : "none";
   $("select-mode-btn").textContent = enable ? "Cancel" : "Select";
   $("select-all").checked = false;
   document
@@ -488,7 +544,10 @@ function onRelocated(id, loc) {
   else {
     library[id].percent = pct;
     updateProgressUI(id, pct);
+    if (pct >= FINISHED_AT && !library[id].finishedAt)
+      library[id].finishedAt = Date.now(); // used by the dashboard
   }
+  noteActivity(); // stats.js: a page turn counts as reading
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveLibrary, 500); // debounce writes
 }
@@ -621,6 +680,17 @@ function closeTopOverlay() {
     return true;
   }
   return false;
+}
+
+// dim and warm overlay: two layers on top of the reader (see #reader-overlay in index.html)
+function applyOverlay() {
+  const o = $("reader-overlay").style;
+  o.setProperty("--dim", settings.dim / 100);
+  o.setProperty("--warm", settings.warm / 100);
+  $("dim-range").value = settings.dim;
+  $("warm-range").value = settings.warm;
+  $("dim-value").textContent = settings.dim + "%";
+  $("warm-value").textContent = settings.warm + "%";
 }
 
 // keep the screen awake while a book is open
