@@ -2,7 +2,7 @@
 let book = null;
 let rendition = null;
 let currentBookId = null;
-let library = {}; // id -> {title, author, addedAt, lastOpened, cfi, percent, words}
+let library = {}; // id -> {title, author, addedAt, lastOpened, cfi, percent, words, chars, lang}
 let settings = {
   fontSize: 100,
   theme: "light",
@@ -505,9 +505,8 @@ async function openBook(id) {
     setWakeLock(settings.keepAwake);
 
     library[id].lastOpened = Date.now();
-    // not prepared yet (for example added before this update): prepare.js does it now, first in line
-    if (locOk && library[id].words) library[id].prepV = PREP_VERSION;
-    else queueBookPrep([id], { urgent: true });
+    // not prepared yet (or counted with an older method): prepare.js does it now, first in line
+    if (!(locOk && isBookPrepared(id))) queueBookPrep([id], { urgent: true });
     saveLibrary();
   } catch (err) {
     console.error("Error opening book:", err);
@@ -573,11 +572,14 @@ function getPercent(loc) {
 
 function updateProgressUI(id, pct) {
   progressFill.style.width = pct * 100 + "%";
-  const words = library[id].words;
+  const b = library[id];
+  const japanese = !!b.chars; // Japanese books are counted in characters (language.js)
+  const amount = japanese ? b.chars : b.words;
   let text = Math.round(pct * 100) + "%";
-  if (words) {
-    const mins = Math.round((words * (1 - pct)) / 230);
-    text += ` · ${words.toLocaleString()} words · ${mins >= 60 ? Math.floor(mins / 60) + "h " + (mins % 60) + "m" : mins + "m"} left`;
+  if (amount) {
+    const perMin = japanese ? JA_CHARS_PER_MIN : WORDS_PER_MIN;
+    const mins = Math.round((amount * (1 - pct)) / perMin);
+    text += ` · ${amount.toLocaleString()} ${japanese ? "characters" : "words"} · ${mins >= 60 ? Math.floor(mins / 60) + "h " + (mins % 60) + "m" : mins + "m"} left`;
   }
   progressText.textContent = text;
 }

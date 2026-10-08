@@ -6,7 +6,9 @@
 // prepared at the same time, and a message at the bottom of the screen shows what is going on.
 // If the app is closed in the middle, the unfinished books are picked up again on the next start.
 
-const PREP_VERSION = 1; // library[id].prepV === PREP_VERSION means "locations and words are saved"
+// library[id].prepV === PREP_VERSION means "locations and text counts are saved".
+// Version 2 counts Japanese by characters (language.js), so books counted by version 1 are counted again once.
+const PREP_VERSION = 2;
 const PREP_CONCURRENCY = 2; // books prepared at the same time (more is faster but heavier on phones)
 const PREP_DONE_MS = 8000; // how long the "done" message stays
 
@@ -67,22 +69,10 @@ function queueBookPrep(ids, { urgent = false } = {}) {
 
 // on startup and after an import: every book that is not prepared yet
 async function queueUnpreparedBooks() {
-  const ids = [];
-  let changed = false;
-  for (const id of Object.keys(library)) {
+  const ids = Object.keys(library).filter((id) => {
     const b = library[id];
-    if (b.prepV === PREP_VERSION || b.prepFail) continue; // failed ones are retried when opened
-    if (
-      b.words &&
-      hasValidLocations(await localforage.getItem("locations-" + id))
-    ) {
-      b.prepV = PREP_VERSION; // prepared by an older version of the app
-      changed = true;
-      continue;
-    }
-    ids.push(id);
-  }
-  if (changed) saveLibrary();
+    return b.prepV !== PREP_VERSION && !b.prepFail; // failed ones are retried when opened
+  });
   if (ids.length) queueBookPrep(ids);
 }
 
@@ -158,7 +148,8 @@ async function runPrepJob(job) {
     const hasLoc = hasValidLocations(
       await localforage.getItem("locations-" + id),
     );
-    const needWords = !library[id].words;
+    // count the text when it was never counted, or was counted with an older method
+    const needWords = !library[id].words || library[id].prepV !== PREP_VERSION;
     // share of the progress bar for each step
     const wLoc = hasLoc ? 0 : needWords ? 0.75 : 1;
     const wWords = needWords ? 1 - wLoc : 0;
@@ -192,10 +183,10 @@ async function runPrepJob(job) {
       setJobProgress(job, wLoc);
     }
 
-    // step 2: word count (for "time left")
+    // step 2: count the text (for "time left"): words, or characters for Japanese (language.js)
     if (needWords) {
       const items = bk.spine.spineItems;
-      let total = 0;
+      const sums = { tokens: 0, letters: 0, cjk: 0, kana: 0 };
       for (let i = 0; i < items.length; i++) {
         if (job.cancelled || !library[id]) {
           job.cancelled = true;
@@ -204,12 +195,21 @@ async function runPrepJob(job) {
         const item = items[i];
         const doc = await item.load(bk.load.bind(bk));
         const text = item.document?.body?.textContent ?? doc?.textContent ?? "";
-        total += (text.match(/\S+/g) || []).length;
+        const part = countText(text);
+        for (const k in sums) sums[k] += part[k];
         item.unload();
         setJobProgress(job, wLoc + ((i + 1) / items.length) * wWords);
         await prepYield(); // keeps the app responsive
       }
-      library[id].words = total;
+      const r = summarizeCounts(sums);
+      library[id].words = r.words;
+      if (r.chars) {
+        library[id].chars = r.chars; // Japanese: characters instead of words
+        library[id].lang = r.lang;
+      } else {
+        delete library[id].chars;
+        delete library[id].lang;
+      }
     }
 
     library[id].prepV = PREP_VERSION;
