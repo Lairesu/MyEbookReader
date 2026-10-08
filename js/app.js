@@ -25,7 +25,8 @@ const bookList = $("book-list");
 const continueSection = $("continue-section");
 const emptyMessage = $("empty-message");
 const fileInput = $("file-input");
-const settingsPanel = $("settings-panel");
+const settingsDrawer = $("settings-drawer");
+const settingsBackdrop = $("settings-backdrop");
 const progressFill = $("progress-fill");
 const progressText = $("progress-text");
 const fontSizeValue = $("font-size-value");
@@ -90,14 +91,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("add-book-btn").addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", handleFileSelect);
   $("back-btn").addEventListener("click", leaveReader);
-  $("menu-btn").addEventListener("click", () =>
-    settingsPanel.classList.remove("hidden"),
-  );
-  $("close-settings").addEventListener("click", () =>
-    settingsPanel.classList.add("hidden"),
-  );
-  $("prev-btn").addEventListener("click", () => turnPage(-1));
-  $("next-btn").addEventListener("click", () => turnPage(1));
+  $("menu-btn").addEventListener("click", openSettings);
+  $("close-settings").addEventListener("click", closeSettings);
+  settingsBackdrop.addEventListener("click", closeSettings);
+  // the left arrow goes back in English books, and forward in right-to-left (Japanese) books
+  $("prev-btn").addEventListener("click", () => turnPage(pageIsRtl() ? 1 : -1));
+  $("next-btn").addEventListener("click", () => turnPage(pageIsRtl() ? -1 : 1));
+  initReadingControls();
   $("font-decrease").addEventListener("click", () => changeFontSize(-10));
   $("font-increase").addEventListener("click", () => changeFontSize(10));
   document
@@ -108,8 +108,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   document.addEventListener("keydown", (e) => {
     if (readerView.classList.contains("hidden")) return;
-    if (e.key === "ArrowLeft") turnPage(-1);
-    if (e.key === "ArrowRight") turnPage(1);
+    if (e.key === "ArrowLeft") turnPage(pageIsRtl() ? 1 : -1);
+    if (e.key === "ArrowRight") turnPage(pageIsRtl() ? -1 : 1);
   });
 
   $("font-family-select").addEventListener("change", (e) => {
@@ -449,7 +449,7 @@ async function deleteSelectedBooks() {
 }
 
 // reader
-async function openBook(id) {
+async function openBook(id, { reopen = false } = {}) {
   try {
     const buf = await localforage.getItem("file-" + id);
     if (!buf) return alert("Book file not found");
@@ -458,7 +458,7 @@ async function openBook(id) {
     currentBookId = id;
     libraryView.classList.add("hidden");
     readerView.classList.remove("hidden");
-    history.pushState({ reader: true }, ""); // so the phone back button returns to the library
+    if (!reopen) history.pushState({ reader: true }, ""); // so the phone back button returns to the library
     $("book-title").textContent = library[id].title || "Untitled";
     $("viewer").innerHTML = "";
     progressFill.style.width = (library[id].percent || 0) * 100 + "%";
@@ -468,15 +468,46 @@ async function openBook(id) {
     book = thisBook;
     await thisBook.ready;
 
+    // reading method of this book: scroll or pages, horizontal or vertical text (see "Reading method" below)
+    const view = bookView(id);
+    const scroll = view.mode === "scroll";
+    const style = effectiveStyle(view); // "", "horizontal" or "vertical"
+    detectedWritingMode = "";
+    bookRtl = /^rtl$/i.test(
+      thisBook.packaging?.metadata?.direction ||
+        thisBook.package?.metadata?.direction ||
+        "",
+    );
+    if (style) {
+      // the text direction has to be in the page before it is drawn, so it goes in as the page is built
+      const css = forcedStyleCss(style) + (scroll ? SCROLL_FIX_CSS : ""); // scrollnav.js
+      thisBook.spine.hooks.serialize.register((output, section) => {
+        section.output = injectCss(section.output, css);
+      });
+    }
+    $("viewer").classList.toggle("scroll-mode", scroll);
+
     rendition = thisBook.renderTo("viewer", {
       width: "100%",
       height: "100%",
-      flow: "paginated",
+      // scroll mode shows one chapter at a time ("scrolled-doc"), so chapters never mix together
+      flow: scroll ? "scrolled-doc" : "paginated",
       manager: "default",
+      // only set when the reader forced a style, otherwise the book decides
+      ...(style
+        ? { defaultDirection: style === "vertical" ? "rtl" : "ltr" }
+        : {}),
+    });
+    rendition.on("rendered", (section, v) => {
+      try {
+        detectedWritingMode = v.contents.writingMode() || "";
+        if (/vertical-rl/.test(detectedWritingMode)) bookRtl = true;
+      } catch (e) {}
     });
     applyReaderTheme(settings.theme);
     rendition.themes.fontSize(settings.fontSize + "%");
     rendition.hooks.content.register(applyReadingStyle); // font and spacing for every page
+    if (scroll) rendition.hooks.content.register(attachScrollNav); // pull to change chapter (scrollnav.js)
 
     rendition.on("relocated", (loc) => onRelocated(id, loc));
 
@@ -494,7 +525,10 @@ async function openBook(id) {
       const dy = e.changedTouches[0].screenY - touchY;
       // must be long enough and mostly horizontal, so taps and scrolling are ignored
       if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-      turnPage(dx < 0 ? 1 : -1);
+      if (scroll) return; // scroll mode: the page scrolls by itself
+      // English: swipe left = forward. Right-to-left (Japanese): swipe right = forward
+      const forward = pageIsRtl() ? dx > 0 : dx < 0;
+      turnPage(forward ? 1 : -1);
     });
     const cachedLoc = await localforage.getItem("locations-" + id);
     const locOk = hasValidLocations(cachedLoc); // prepare.js
@@ -519,19 +553,25 @@ async function openBook(id) {
 let turning = false;
 async function turnPage(dir) {
   if (!rendition || turning) return; // ignore taps while a turn is running
+  if (bookView(currentBookId).mode === "scroll") {
+    // scroll mode: the arrows and buttons change chapter (scrollnav.js)
+    await goChapter(dir);
+    return;
+  }
   turning = true;
   const v = $("viewer");
+  const slide = pageIsRtl() ? -1 : 1; // pages slide the other way in right-to-left books
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   try {
     v.style.transition = "transform 110ms ease-in, opacity 110ms ease-in";
-    v.style.transform = `translateX(${-dir * 20}px)`;
+    v.style.transform = `translateX(${-dir * slide * 20}px)`;
     v.style.opacity = "0";
     await wait(100);
 
     await (dir > 0 ? rendition.next() : rendition.prev());
 
     v.style.transition = "none"; // jump to the entry side without animating
-    v.style.transform = `translateX(${dir * 20}px)`;
+    v.style.transform = `translateX(${dir * slide * 20}px)`;
     void v.offsetWidth; // force the browser to apply it before animating back
     v.style.transition = "transform 160ms ease-out, opacity 160ms ease-out";
     v.style.transform = "translateX(0)";
@@ -603,8 +643,121 @@ async function showLibrary() {
   currentBookId = null;
   readerView.classList.add("hidden");
   libraryView.classList.remove("hidden");
-  settingsPanel.classList.add("hidden");
+  closeSettings();
   renderLibrary();
+}
+
+// ---------- settings drawer ----------
+const settingsOpen = () => settingsDrawer.classList.contains("open");
+function openSettings() {
+  syncReadingControls();
+  settingsDrawer.classList.add("open");
+  settingsBackdrop.classList.add("show");
+}
+function closeSettings() {
+  settingsDrawer.classList.remove("open");
+  settingsBackdrop.classList.remove("show");
+}
+
+// ---------- reading method (saved for each book) ----------
+// view.mode:  "paged" (swipe pages, like a book) or "scroll"
+// view.style: "" = the book decides, "horizontal" (English style), "vertical" (Japanese style)
+// view.dir:   "auto", "ltr" (swipe left = forward) or "rtl" (swipe right = forward)
+let bookRtl = false; // the book itself turns pages right to left
+let detectedWritingMode = ""; // what the book's own text direction turned out to be
+
+const bookView = (id) => ({
+  mode: "paged",
+  style: "",
+  dir: "auto",
+  ...(library[id]?.view || {}),
+});
+
+// scroll mode always uses horizontal text, because vertical text scrolls sideways and is awkward to read
+const effectiveStyle = (view) =>
+  view.mode === "scroll" ? "horizontal" : view.style;
+
+// do pages turn from right to left? (decides which way to swipe and which arrow goes forward)
+function pageIsRtl() {
+  const v = bookView(currentBookId);
+  if (v.mode === "scroll") return false;
+  if (v.dir === "rtl") return true;
+  if (v.dir === "ltr") return false;
+  if (v.style === "vertical") return true;
+  if (v.style === "horizontal") return false;
+  return bookRtl; // "automatic": follow the book
+}
+
+function forcedStyleCss(style) {
+  if (style === "vertical")
+    return "html, body { writing-mode: vertical-rl !important; -webkit-writing-mode: vertical-rl !important; -epub-writing-mode: vertical-rl !important; text-orientation: mixed !important; }";
+  return "html, html body, html body * { writing-mode: horizontal-tb !important; -webkit-writing-mode: horizontal-tb !important; -epub-writing-mode: horizontal-tb !important; }";
+}
+
+// puts a <style> into the page text before it is drawn
+function injectCss(html, css) {
+  const tag = `<style id="forced-style">${css}</style>`;
+  if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, tag + "</head>");
+  if (/<head\s*\/>/i.test(html))
+    return html.replace(/<head\s*\/>/i, `<head>${tag}</head>`);
+  return html;
+}
+
+// the controls show the settings of the book that is open
+function syncReadingControls() {
+  if (!currentBookId) return;
+  const v = bookView(currentBookId);
+  $("read-mode").value = v.mode;
+  $("read-style").value = effectiveStyle(v);
+  $("read-style").disabled = v.mode === "scroll";
+  $("page-dir").value = v.dir;
+  $("page-dir").disabled = v.mode === "scroll";
+  const wm = /vertical/.test(detectedWritingMode) ? "vertical" : "horizontal";
+  $("read-hint").textContent =
+    v.mode === "scroll"
+      ? "Scroll mode shows one chapter at a time with horizontal text. Pull hard past the end to reach the next chapter. Arrow keys and the buttons change chapter."
+      : `This book is showing ${wm} text. Pages turn ${pageIsRtl() ? "right to left" : "left to right"}.`;
+}
+
+// pages and text direction are decided when the book is drawn, so changing them opens the book again
+async function setBookView(changes, { reopen }) {
+  if (!currentBookId) return;
+  const id = currentBookId;
+  library[id].view = { ...bookView(id), ...changes };
+  if (reopen) {
+    clearTimeout(saveTimer);
+    await saveLibrary();
+    closeSettings();
+    await openBook(id, { reopen: true }); // comes back to the same place
+  } else {
+    saveLibrary();
+    syncReadingControls();
+  }
+}
+
+function initReadingControls() {
+  $("read-mode").addEventListener("change", (e) =>
+    setBookView({ mode: e.target.value }, { reopen: true }),
+  );
+  $("read-style").addEventListener("change", (e) =>
+    setBookView({ style: e.target.value }, { reopen: true }),
+  );
+  $("page-dir").addEventListener("change", (e) =>
+    setBookView({ dir: e.target.value }, { reopen: false }),
+  );
+  document.querySelectorAll(".read-preset").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      const jp = btn.dataset.preset === "japanese";
+      setBookView(
+        {
+          mode: "paged",
+          style: jp ? "vertical" : "horizontal",
+          dir: jp ? "rtl" : "ltr",
+        },
+        { reopen: true },
+      );
+    }),
+  );
 }
 
 // settings
@@ -653,8 +806,8 @@ function closeTopOverlay() {
     closeDrawer();
     return true;
   }
-  if (!settingsPanel.classList.contains("hidden")) {
-    settingsPanel.classList.add("hidden");
+  if (settingsOpen()) {
+    closeSettings();
     return true;
   }
   if (!$("hl-bar").classList.contains("hidden")) {

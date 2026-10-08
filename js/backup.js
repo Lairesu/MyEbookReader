@@ -160,6 +160,7 @@ async function importBackup(file) {
           words: b.words,
           shelves: b.shelves || [],
           finishedAt: b.finishedAt || null,
+          view: b.view, // reading method (scroll or pages, text direction)
         };
         added++;
       } else {
