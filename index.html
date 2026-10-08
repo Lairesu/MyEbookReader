@@ -29,10 +29,36 @@
       <header class="header">
         <h1>My Books</h1>
         <div class="header-buttons">
-          <a href="dashboard.html" class="btn btn-secondary">Dashboard</a>
-          <button id="backup-btn" class="btn btn-secondary">Backup</button>
-          <button id="select-mode-btn" class="btn btn-secondary">Select</button>
-          <button id="add-book-btn" class="btn">+ Add Books</button>
+          <a
+            href="dashboard.html"
+            class="btn btn-secondary btn-iconic"
+            title="Dashboard"
+            aria-label="Dashboard"
+          >
+            <span class="btn-ico" data-icon="chart"></span>
+            <span class="btn-label">Dashboard</span>
+          </a>
+          <button
+            id="backup-btn"
+            class="btn btn-secondary btn-iconic"
+            title="Backup"
+            aria-label="Backup"
+          >
+            <span class="btn-ico" data-icon="save"></span>
+            <span class="btn-label">Backup</span>
+          </button>
+          <button
+            id="select-mode-btn"
+            class="btn btn-secondary btn-iconic"
+            title="Select books"
+            aria-label="Select books"
+          >
+            <span class="btn-ico" data-icon="select"></span>
+            <span class="btn-label">Select</span>
+          </button>
+          <button id="add-book-btn" class="btn">
+            + Add<span class="hide-sm"> Books</span>
+          </button>
           <button
             id="shelf-selected-btn"
             class="btn btn-secondary"

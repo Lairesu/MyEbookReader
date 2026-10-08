@@ -425,7 +425,13 @@ function toggleSelectMode(enable) {
   $("select-controls").style.display = enable ? "block" : "none";
   $("delete-selected-btn").style.display = enable ? "inline-block" : "none";
   $("shelf-selected-btn").style.display = enable ? "inline-block" : "none";
-  $("select-mode-btn").textContent = enable ? "Cancel" : "Select";
+  const selBtn = $("select-mode-btn"); // icon button: swap the icon and the label together
+  selBtn.querySelector(".btn-ico").innerHTML =
+    ICONS[enable ? "close" : "select"];
+  selBtn.querySelector(".btn-label").textContent = enable ? "Cancel" : "Select";
+  selBtn.title = selBtn.ariaLabel = enable
+    ? "Cancel selection"
+    : "Select books";
   $("select-all").checked = false;
   document
     .querySelectorAll(".book-checkbox")

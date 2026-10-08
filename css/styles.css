@@ -1422,7 +1422,7 @@ body.theme-sepia .dash-card {
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
   transform: translateX(-50%);
-  z-index: 100; /* under the side drawer and panels, so it never blocks taps there */
+  z-index: 300;
   width: min(440px, calc(100vw - 16px));
   padding: 10px 6px 10px 14px;
   background: #1f2937;
@@ -1488,4 +1488,27 @@ body.theme-sepia .dash-card {
 /* inside a book keep it to one slim line so it covers as little of the page as possible */
 #reader-view:not(.hidden) ~ #prep-status .prep-detail {
   display: none;
+}
+
+/* header buttons: icon + text on wide screens, icon only on phones */
+.header-buttons .btn-iconic {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-ico {
+  display: inline-flex;
+}
+.btn-ico .icon {
+  width: 20px;
+  height: 20px;
+}
+@media (max-width: 600px) {
+  .btn-label,
+  .hide-sm {
+    display: none;
+  }
+  .header-buttons .btn-iconic {
+    padding: 10px;
+  }
 }
