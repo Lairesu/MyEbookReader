@@ -94,6 +94,7 @@ async function goToChapter(href) {
   for (const target of [...new Set(tries)]) {
     try {
       await rendition.display(target);
+      if (!frag) resetChapterTop(); // scroll mode: start exactly at the top of the chapter (scrollnav.js)
       return;
     } catch (err) {
       errors.push(`${target}: ${err?.message || err}`);
